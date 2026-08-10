@@ -1,0 +1,8 @@
+[flake8]
+max-line-length = 119
+exclude = tests, venv, .env, .git
+ignore =
+    # правило обязывает делать пустую строку в конце модуля
+    W292,
+show-source = true
+statistics = true
