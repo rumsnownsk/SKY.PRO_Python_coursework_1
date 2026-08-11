@@ -32,7 +32,7 @@ def load_transactions(
     COL_MAP = {
         "Дата операции": "date",
         "Дата платежа": "payment_date",
-        "Номер карты": "card_number",
+        "Номер карты": "mask_card_number",
         "Статус": "status",
         "Сумма операции": "amount",
         "Валюта операции": "currency",
@@ -50,6 +50,12 @@ def load_transactions(
     col_map_normalized = {k.strip().lower(): v for k, v in COL_MAP.items()}
 
     df = df.rename(columns=col_map_normalized)
+
+    df["card_last_4"] = (
+        df["mask_card_number"]
+        .astype(str)
+        .str.extract(r'(\d{4})$')  # Берёт ровно 4 цифры в конце строки
+    )
 
     # Приводим колонку "Дата операции" к datetime с правильным порядком день/месяц
     df["date"] = pd.to_datetime(

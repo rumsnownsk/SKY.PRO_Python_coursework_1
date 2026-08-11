@@ -10,13 +10,15 @@ import pandas as pd
 
 
 def data_to_view_page(df: DataFrame, datetime_str):
+    # Получение ДатаФрейма транзакций с начала месяца до даты, указанной пользователем
     transactions_by_range = get_transactions_by_date_range_df(df, datetime_str)
 
+    cards_data = group_transactions_by_cards(transactions_by_range)
     top_transactions = get_top_n_expensive_transactions(transactions_by_range)
 
     return {
         "greeting": get_greeting(datetime_str),
-        # "cards": cards_df,
+        "cards": cards_data,
         "top_transactions": top_transactions
     }
 
@@ -56,7 +58,6 @@ def get_transactions_by_date_range_df(df: DataFrame, date_str: str) -> pd.DataFr
 
     return df.loc[mask]
 
-
 def get_top_n_expensive_transactions(df: pd.DataFrame, top_n: int = 5) -> list[dict[Hashable, Any]]:
     """
     Возвращает топ-N самых дорогих операций.
@@ -85,9 +86,10 @@ def get_top_n_expensive_transactions(df: pd.DataFrame, top_n: int = 5) -> list[d
     ]
     top_transactions = top_transactions[available_columns]
 
-    if "card_number" in top_transactions.columns:
-        top_transactions["card_number"] = (
-            top_transactions["card_number"]
+    # вытягиваем только цифры из номера-маски карты, по типу *5051 → 5051
+    if "mask_card_number" in top_transactions.columns:
+        top_transactions["mask_card_number"] = (
+            top_transactions["mask_card_number"]
             .astype(str)
             .str.extract(r'(\d+)')  # берёт первую последовательность цифр
         )
@@ -106,16 +108,43 @@ def get_top_n_expensive_transactions(df: pd.DataFrame, top_n: int = 5) -> list[d
 
     return top_transactions.to_dict(orient="records")
 
+def group_transactions_by_cards(df:DataFrame):
+    # Оставляем только строки, где есть номер карты
+    df_clean = df.dropna(subset=["card_last_4"]).copy()
 
-def default_serializer(obj):
-    if isinstance(obj, pd.Timestamp):
-        return obj.strftime("%Y-%m-%d %H:%M:%S")
-    raise TypeError(f"Type not serializable: {type(obj)}")
+    if df_clean.empty:
+        return []
+
+    # 1. Фильтруем только расходы: оставляем строки, где payment_amount < 0
+    expenses_df = df_clean[df_clean["amount"] < 0].copy()
+
+    if expenses_df.empty: return []
+
+    # 2. Группируем по чистым последним 4 цифрам
+    grouped = expenses_df.groupby("card_last_4", dropna=False)
+
+    # 3. Агрегируем: считаем сумму расходов и кэшбэка
+    agg_df = grouped.agg(
+        total_spend = ("amount", "sum"),
+        cashback = ("cashback", "sum")
+    ).reset_index()
+
+    # 4. Убираем минус у расходов: делаем модуль (абсолютное значение)
+    agg_df["total_spend"] = agg_df['total_spend'].abs().round(2)
+
+    # 5. Переименовываем колонку для JSON-ответа
+    agg_df = agg_df.rename(columns={"card_last_4": "last_digits"})
+
+    return agg_df.to_dict(orient="records")
+
+
+# def default_serializer(obj):
+#     if isinstance(obj, pd.Timestamp):
+#         return obj.strftime("%Y-%m-%d %H:%M:%S")
+#     raise TypeError(f"Type not serializable: {type(obj)}")
 
 
 if __name__ == "__main__":
     # print(get_greeting("2021-12-25 15:01:01"))
-    print(json.dumps(data_to_view_page(load_transactions(), "2021-12-31 15:01:01"), indent=2, ensure_ascii=False,
-                     default=default_serializer))
-    # print(data_to_view_page(load_transactions(), "2021-12-31 15:01:01"))
-    # get_top_transactions_by_date_range()
+    print(json.dumps(data_to_view_page(load_transactions(), "2021-12-31 15:01:01"), indent=2, ensure_ascii=False))
+    # group_transactions_by_cards(load_transactions())
