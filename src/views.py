@@ -1,12 +1,19 @@
 import json
-from datetime import datetime
-from typing import List, Dict, Any, Hashable
-from zoneinfo import available_timezones
+import time
 
-from pandas import DataFrame
-from src.utils import load_transactions
-
+import requests
 import pandas as pd
+
+from datetime import datetime
+from typing import List, Dict, Any, Hashable, Tuple
+from pandas import DataFrame
+
+from src.config import PROJECT_ROOT, CACHE_FILE_CBR
+from src.utils import load_transactions, _save_cache, _load_cache
+
+# Кэш: храним весь ответ ЦБ целиком + время запроса
+_cbr_cache: Dict[str, Any] = {}
+CACHE_TTL = 60  # 1 минута
 
 
 def data_to_view_page(df: DataFrame, datetime_str):
@@ -15,11 +22,14 @@ def data_to_view_page(df: DataFrame, datetime_str):
 
     cards_data = group_transactions_by_cards(transactions_by_range)
     top_transactions = get_top_n_expensive_transactions(transactions_by_range)
+    currency_rates = get_currency_rates()
 
     return {
         "greeting": get_greeting(datetime_str),
         "cards": cards_data,
-        "top_transactions": top_transactions
+        "top_transactions": top_transactions,
+        "currency_rates": currency_rates,
+        # "stock_prices": card_last_4,
     }
 
 
@@ -57,6 +67,7 @@ def get_transactions_by_date_range_df(df: DataFrame, date_str: str) -> pd.DataFr
     mask = (df["date"] >= start_date) & (df["date"] <= end_date)
 
     return df.loc[mask]
+
 
 def get_top_n_expensive_transactions(df: pd.DataFrame, top_n: int = 5) -> list[dict[Hashable, Any]]:
     """
@@ -108,7 +119,8 @@ def get_top_n_expensive_transactions(df: pd.DataFrame, top_n: int = 5) -> list[d
 
     return top_transactions.to_dict(orient="records")
 
-def group_transactions_by_cards(df:DataFrame):
+
+def group_transactions_by_cards(df: DataFrame):
     # Оставляем только строки, где есть номер карты
     df_clean = df.dropna(subset=["card_last_4"]).copy()
 
@@ -125,8 +137,8 @@ def group_transactions_by_cards(df:DataFrame):
 
     # 3. Агрегируем: считаем сумму расходов и кэшбэка
     agg_df = grouped.agg(
-        total_spend = ("amount", "sum"),
-        cashback = ("cashback", "sum")
+        total_spend=("amount", "sum"),
+        cashback=("cashback", "sum")
     ).reset_index()
 
     # 4. Убираем минус у расходов: делаем модуль (абсолютное значение)
@@ -138,10 +150,63 @@ def group_transactions_by_cards(df:DataFrame):
     return agg_df.to_dict(orient="records")
 
 
-# def default_serializer(obj):
-#     if isinstance(obj, pd.Timestamp):
-#         return obj.strftime("%Y-%m-%d %H:%M:%S")
-#     raise TypeError(f"Type not serializable: {type(obj)}")
+def get_currency_rates() -> List[Dict[str, Any]]:
+    # определяем где лежит сам файл user_settings.json
+    user_settings_file = PROJECT_ROOT / "src/user_settings.json"
+
+    # Проверка файла настроек
+    if not user_settings_file.exists():
+        raise FileNotFoundError(f"⚠ Ошибка! Проверьте наличие файлика <{user_settings_file}>")
+    if user_settings_file.stat().st_size == 0:
+        raise ValueError(f"⚠ Ошибка! Файл настроек пуст: <{user_settings_file}>")
+
+    # читаем файл настроек user_settings.json
+    with open(user_settings_file, "r", encoding="utf-8") as f:
+        user_settings = json.load(f)
+    user_currencies = user_settings.get("user_currencies", [])
+
+    # Проверка поля user_currencies в файле настроек "user_settings.json"
+    if not isinstance(user_currencies, list):
+        raise ValueError("Ошибка! В файле <user_settings.json> поле user_currencies должно быть списком")
+
+    # 1. Пытаемся загрузить кэш с диска
+    cbr_data = _load_cache(CACHE_FILE_CBR)
+    from_cache = False
+
+    # 2. Если нет свежих данных — делаем ровно ОДИН запрос к ЦБ
+    if cbr_data is None:
+        try:
+            response = requests.request("get", "https://www.cbr-xml-daily.ru/daily_json.js", timeout=5.0)
+            response.raise_for_status()
+            cbr_data = response.json()
+        except requests.exceptions.Timeout:
+            raise RuntimeError("упс!!! Превышено время ожидания ответа от API сервиса")
+        except requests.exceptions.RequestException as e:
+            raise RuntimeError(f"упс!!! Ошибка сети при запросе курсов валют: {e}")
+        except ValueError as e:
+            raise RuntimeError(f"Не удалось распарсить ответ API от ЦБ: {e}") from e
+
+        # Сохраняем весь ответ в кэш вместе с временем
+        _save_cache(file_path=CACHE_FILE_CBR, data=cbr_data)
+    else:
+        from_cache = True
+
+    cbr_currencies = cbr_data.get("Valute", {})
+
+    current_courses = []
+    for currency in user_currencies:
+        if currency in cbr_currencies:
+            current_courses.append({
+                "currency": currency,
+                "rate": cbr_currencies[currency]["Value"],
+
+                # упрощённо: если брали из кэша, то from_cache=True
+                # "from_cache": from_cache
+            })
+        else:
+            pass
+
+    return current_courses
 
 
 if __name__ == "__main__":

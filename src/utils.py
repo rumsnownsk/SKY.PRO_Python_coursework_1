@@ -1,10 +1,11 @@
+import json
+import time
 from pathlib import Path
-from src.config import PROJECT_ROOT
-from typing import List, Dict, Any
+from src.config import PROJECT_ROOT, CACHE_TTL
+from typing import List, Dict, Any, Optional
 from datetime import datetime
 
 import pandas as pd
-
 
 def load_transactions(
         filename: str = "operations.xlsx",
@@ -79,38 +80,29 @@ def load_transactions(
     return df
 
 
-def format_transactions_for_response(
-    transactions: List[Dict[str, Any]],
-    date_format: str = "%d.%m.%Y"
-) -> List[Dict[str, Any]]:
-    """
-    Преобразует поле 'operation_date' из datetime в строку заданного формата.
-    Также округляет суммы до 2 знаков (для красивого вывода).
+def _load_cache(file_path) -> Optional[Dict[str, Any]]:
+    if not file_path.exists():
+        return None
+    try:
+        with file_path.open("r", encoding="utf-8") as f:
+            data = json.load(f)
+        timestamp = data.get("timestamp")
+        if timestamp is None:
+            return None
+        age = time.time() - timestamp
+        if age < CACHE_TTL:
+            return data.get("data")
+    except (json.JSONDecodeError, OSError, ValueError):
+        # Файл битый или не JSON — считаем, что кэша нет
+        pass
+    return None
 
-    :param transactions: список словарей (результат to_dict(orient='records'))
-    :param date_format: формат даты для strftime, по умолчанию "%d.%m.%Y" -> "21.12.2021"
-    :return: новый список словарей с отформатированными данными
-    """
-    formatted = []
 
-    for t in transactions:
-        # Создаём копию, чтобы не менять исходные данные
-        row = t.copy()
-
-        # Форматируем дату, если она есть и это datetime
-        if "operation_date" in row and isinstance(row["operation_date"], datetime):
-            row["date"] = row["operation_date"].strftime(date_format)
-            # Удаляем исходное поле с datetime, если в ответе оно не нужно
-            del row["operation_date"]
-        elif "operation_date" in row:
-            # Если вдруг там уже строка — оставляем как есть
-            row["date"] = str(row["operation_date"])
-            del row["operation_date"]
-
-        # Округляем суммы до 2 знаков для красивого вывода (опционально)
-        if "amount" in row and isinstance(row["amount"], (int, float)):
-            row["amount"] = round(float(row["amount"]), 2)
-
-        formatted.append(row)
-
-    return formatted
+def _save_cache(file_path, data: Dict[str, Any]) -> None:
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "data": data,
+        "timestamp": time.time(),
+    }
+    with file_path.open("w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
