@@ -100,12 +100,9 @@ def _load_cache(file_path) -> Optional[Dict[str, Any]]:
 
 def _save_cache(file_path, data: Dict[str, Any]) -> None:
     file_path.parent.mkdir(parents=True, exist_ok=True)
-    payload = {
-        "data": data,
-        "timestamp": time.time(),
-    }
+
     with file_path.open("w", encoding="utf-8") as f:
-        json.dump(payload, f, ensure_ascii=False, indent=2)
+        json.dump(data, f, ensure_ascii=False, indent=2)
 
 def get_user_setting(field):
     # определяем где лежит сам файл user_settings.json

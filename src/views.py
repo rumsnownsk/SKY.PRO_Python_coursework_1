@@ -1,22 +1,35 @@
 import json
 import os
 import time
-import requests
 import pandas as pd
 import requests
 
 from datetime import datetime
-from typing import List, Dict, Any, Hashable, Tuple
+from typing import List, Dict, Any, Hashable, Optional
 from pandas import DataFrame
 from concurrent.futures import ThreadPoolExecutor
-from src.config import PROJECT_ROOT, CACHE_FILE_CBR
+from src.config import CACHE_FILE_CBR, CACHE_FILE_FINNHUB
 from src.utils import load_transactions, _save_cache, _load_cache, get_user_setting
 
 # Кэш: храним весь ответ ЦБ целиком + время запроса
 _cbr_cache: Dict[str, Any] = {}
 
 
-def data_to_view_page(df: DataFrame, datetime_str):
+def data_for_view_page(df: DataFrame, datetime_str):
+    """
+    Формирует словарь данных для отображения на странице приветствия.
+
+    Собирает:
+      - приветствие по времени суток;
+      - статистику по картам (расходы и кэшбэк);
+      - топ самых дорогих транзакций;
+      - курсы валют (с кэшем ЦБ);
+      - котировки акций (с кэшем Finnhub).
+
+    :param df: DataFrame с транзакциями.
+    :param datetime_str: Строка даты в формате "YYYY-MM-DD HH:MM:SS".
+    :return: Словарь с данными для фронтенда/шаблона.
+    """
     # Получение ДатаФрейма транзакций с начала месяца до даты, указанной пользователем
     transactions_by_range = get_transactions_by_date_range_df(df, datetime_str)
 
@@ -25,19 +38,21 @@ def data_to_view_page(df: DataFrame, datetime_str):
 
     return {
         "greeting": get_greeting(datetime_str),
-        # "cards": cards_data,
-        # "top_transactions": top_transactions,
-        # "currency_rates": get_currency_rates(),
+        "cards": cards_data,
+        "top_transactions": top_transactions,
+        "currency_rates": get_currency_rates(),
         "stock_prices": get_stock_prices(),
     }
 
 
 def get_greeting(datetime_str: str) -> str:
     """
-    Функция принимает строку формата YYYY-MM-DD HH:MM:SS и возвращает приветствие
-    в зависимости от текущего времени суток
-    :param datetime_str:
-    :return:
+    Возвращает приветствие в зависимости от часа суток.
+
+    Если строка даты некорректна, возвращает нейтральное приветствие.
+
+    :param datetime_str: Дата и время в формате "YYYY-MM-DD HH:MM:SS".
+    :return: Строка с приветствием.
     """
     try:
         dt = datetime.strptime(datetime_str, "%Y-%m-%d %H:%M:%S")
@@ -57,8 +72,14 @@ def get_greeting(datetime_str: str) -> str:
 
 def get_transactions_by_date_range_df(df: DataFrame, date_str: str) -> pd.DataFrame:
     """
-    Возвращает транзакции с начала месяца по указанную дату.
-    date_str: строка формата YYYY-MM-DD HH:MM:SS
+    Фильтрует DataFrame: оставляет транзакции с начала месяца по указанную дату.
+
+    Начало месяца — 00:00:00 первого числа месяца указанной даты.
+    Конец диапазона — указанная дата.
+
+    :param df: Исходный DataFrame с колонкой "date".
+    :param date_str: Конечная дата в формате "YYYY-MM-DD HH:MM:SS".
+    :return: Отфильтрованный DataFrame.
     """
     end_date = datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")
     start_date = end_date.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
@@ -70,9 +91,16 @@ def get_transactions_by_date_range_df(df: DataFrame, date_str: str) -> pd.DataFr
 
 def get_top_n_expensive_transactions(df: pd.DataFrame, top_n: int = 5) -> list[dict[Hashable, Any]]:
     """
-    Возвращает топ-N самых дорогих операций.
-    Колонка 'date' уже есть в DataFrame (из load_transactions),
-    здесь мы её форматируем в строку "%d.%m.%Y".
+    Возвращает список топ-N самых дорогих транзакций по модулю суммы.
+
+    Для каждой транзакции:
+      - форматирует дату в строку "DD.MM.YYYY";
+      - извлекает цифры из маски номера карты (если колонка есть);
+      - оставляет только нужные колонки.
+
+    :param df: DataFrame транзакций.
+    :param top_n: Количество топ-транзакций.
+    :return: Список словарей с данными транзакций.
     """
 
     # 1. Делаем копию, чтобы не менять оригинал
@@ -120,6 +148,15 @@ def get_top_n_expensive_transactions(df: pd.DataFrame, top_n: int = 5) -> list[d
 
 
 def group_transactions_by_cards(df: DataFrame):
+    """
+    Группирует транзакции по последним 4 цифрам карты, считает расходы и кэшбэк.
+
+    Оставляются только строки с заполненным card_last_4 и отрицательной суммой (расходы).
+    Суммы расходов приводятся к положительному значению (модуль).
+
+    :param df: DataFrame транзакций с колонками card_last_4, amount, cashback.
+    :return: Список словарей: [{"last_digits": "...", "total_spend": ..., "cashback": ...}, ...]
+    """
     # Оставляем только строки, где есть номер карты
     df_clean = df.dropna(subset=["card_last_4"]).copy()
 
@@ -150,6 +187,14 @@ def group_transactions_by_cards(df: DataFrame):
 
 
 def get_currency_rates() -> List[Dict[str, Any]]:
+    """
+    Получает курсы валют для списка user_currencies из настроек.
+
+    Использует дисковый кэш: если данные свежие (меньше CACHE_TTL), запрос к ЦБ не делается.
+    При отсутствии/устаревшем кэше выполняется один запрос к API ЦБ и результат сохраняется.
+
+    :return: Список словарей вида: [{"currency": "USD", "rate": 90.5, "from_cache": True}, ...]
+    """
     # Валидация и получение значения поля "user_currencies" из файла настроек "user_settings.json"
     user_currencies = get_user_setting("user_currencies")
 
@@ -175,7 +220,7 @@ def get_currency_rates() -> List[Dict[str, Any]]:
             raise RuntimeError(f"Не удалось распарсить ответ API от ЦБ: {e}") from e
 
         # Сохраняем весь ответ в кэш вместе с временем
-        _save_cache(file_path=CACHE_FILE_CBR, data=cbr_data)
+        _save_cache(file_path=CACHE_FILE_CBR, data={"data": cbr_data, "timestamp": time.time()})
     else:
         from_cache = True
 
@@ -198,6 +243,15 @@ def get_currency_rates() -> List[Dict[str, Any]]:
 
 
 def get_stock_prices():
+    """
+    Получает котировки акций для списка user_stocks из настроек.
+
+    Использует дисковый кэш по времени. Если кэш устарел или отсутствует,
+    параллельно запрашивает котировки для всех тикеров (до 5 потоков).
+    Один упавший тикер не ломает весь результат.
+
+    :return: Список словарей вида: [{"stock": "AAPL", "price": 192.5, "from_cache": True}, ...]
+    """
     url_finnhub = "https://finnhub.io/api/v1/quote"
     token = os.getenv("API_KEY_FINNHUB")
 
@@ -207,25 +261,52 @@ def get_stock_prices():
     # Валидация и получение значения поля "user_stocks" из файла настроек "user_settings.json"
     user_stocks = get_user_setting("user_stocks")
 
-    # Проверка поля user_currencies в файле настроек "user_settings.json"
+    # Проверка поля user_stocks в файле настроек "user_settings.json"
     if not isinstance(user_stocks, list):
-        raise ValueError("Ошибка! В файле <user_settings.json> поле user_currencies должно быть списком")
+        raise ValueError("Ошибка! В файле <user_settings.json> поле user_stocks должно быть списком")
 
-    def fetch_quote(symbol):
-        response = requests.get(url_finnhub, params={
-            "symbol": symbol,
-            "token": token
-        })
-        response.raise_for_status()
-        return symbol, response.json().get("c")
+    # 1. Пробуем загрузить кэш
+    finn_data = _load_cache(CACHE_FILE_FINNHUB)
+    from_cache = False
+    raw_data: Optional[Dict[str, float]] = None
 
-    with ThreadPoolExecutor(max_workers=5) as executor:
-        result = dict(executor.map(fetch_quote, user_stocks))
+    if finn_data is not None:
+        raw_data = finn_data.get("data")
+        from_cache = True
 
-    
-    print(result)
+    # 2. Если кэша нет или он битый — делаем запросы
+    if raw_data is None:
+        def fetch_quote(symbol):
+            try:
+                response = requests.get(
+                    url_finnhub,
+                    params={"symbol": symbol, "token": token},
+                    timeout=5.0,
+                )
+                response.raise_for_status()
+                return symbol, response.json().get("c")
+            except Exception:
+                # Если один тикер падает — остальные всё равно должны работать
+                return symbol, None
+
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            results = list(executor.map(fetch_quote, user_stocks))
+
+        raw_data = {sym: price for sym, price in results if price is not None}
+
+        # stock_prices = [{"stock": k, "price": v, "from_cache": from_cache} for k, v in response.items()]
+        _save_cache(file_path=CACHE_FILE_FINNHUB, data={"data": raw_data, "timestamp": time.time()})
+
+    # 3. Формируем итоговый список
+    stock_prices: List[Dict[str, Any]] = [
+        {"stock": sym, "price": price, "from_cache": from_cache}
+        for sym, price in raw_data.items()
+    ]
+
+    return stock_prices
+
 
 if __name__ == "__main__":
     # print(get_greeting("2021-12-25 15:01:01"))
-    print(json.dumps(data_to_view_page(load_transactions(), "2021-12-31 15:01:01"), indent=2, ensure_ascii=False))
+    print(json.dumps(data_for_view_page(load_transactions(), "2021-12-31 15:01:01"), indent=2, ensure_ascii=False))
     # group_transactions_by_cards(load_transactions())
