@@ -1,5 +1,4 @@
 {
   "user_currencies": ["USD", "EUR"],
-  "user_stocks": ["AAPL", "AMZN", "GOOGL", "MSFT", "TSLA"],
-  "CACHE_TTL": 60
+  "user_stocks": ["AAPL", "AMZN", "GOOGL", "MSFT", "TSLA"]
 }

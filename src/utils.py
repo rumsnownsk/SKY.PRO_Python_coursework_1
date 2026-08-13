@@ -106,3 +106,19 @@ def _save_cache(file_path, data: Dict[str, Any]) -> None:
     }
     with file_path.open("w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
+
+def get_user_setting(field):
+    # определяем где лежит сам файл user_settings.json
+    user_settings_file = PROJECT_ROOT / "src/user_settings.json"
+
+    # Проверка файла настроек
+    if not user_settings_file.exists():
+        raise FileNotFoundError(f"⚠ Ошибка! Проверьте наличие файлика <{user_settings_file}>")
+    if user_settings_file.stat().st_size == 0:
+        raise ValueError(f"⚠ Ошибка! Файл настроек пуст: <{user_settings_file}>")
+
+    # читаем файл настроек user_settings.json
+    with open(user_settings_file, "r", encoding="utf-8") as f:
+        user_settings = json.load(f)
+
+    return user_settings.get(field, [])

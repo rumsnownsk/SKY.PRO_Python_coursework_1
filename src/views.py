@@ -1,19 +1,19 @@
 import json
+import os
 import time
-
 import requests
 import pandas as pd
+import requests
 
 from datetime import datetime
 from typing import List, Dict, Any, Hashable, Tuple
 from pandas import DataFrame
-
+from concurrent.futures import ThreadPoolExecutor
 from src.config import PROJECT_ROOT, CACHE_FILE_CBR
-from src.utils import load_transactions, _save_cache, _load_cache
+from src.utils import load_transactions, _save_cache, _load_cache, get_user_setting
 
 # Кэш: храним весь ответ ЦБ целиком + время запроса
 _cbr_cache: Dict[str, Any] = {}
-CACHE_TTL = 60  # 1 минута
 
 
 def data_to_view_page(df: DataFrame, datetime_str):
@@ -22,14 +22,13 @@ def data_to_view_page(df: DataFrame, datetime_str):
 
     cards_data = group_transactions_by_cards(transactions_by_range)
     top_transactions = get_top_n_expensive_transactions(transactions_by_range)
-    currency_rates = get_currency_rates()
 
     return {
         "greeting": get_greeting(datetime_str),
-        "cards": cards_data,
-        "top_transactions": top_transactions,
-        "currency_rates": currency_rates,
-        # "stock_prices": card_last_4,
+        # "cards": cards_data,
+        # "top_transactions": top_transactions,
+        # "currency_rates": get_currency_rates(),
+        "stock_prices": get_stock_prices(),
     }
 
 
@@ -151,19 +150,8 @@ def group_transactions_by_cards(df: DataFrame):
 
 
 def get_currency_rates() -> List[Dict[str, Any]]:
-    # определяем где лежит сам файл user_settings.json
-    user_settings_file = PROJECT_ROOT / "src/user_settings.json"
-
-    # Проверка файла настроек
-    if not user_settings_file.exists():
-        raise FileNotFoundError(f"⚠ Ошибка! Проверьте наличие файлика <{user_settings_file}>")
-    if user_settings_file.stat().st_size == 0:
-        raise ValueError(f"⚠ Ошибка! Файл настроек пуст: <{user_settings_file}>")
-
-    # читаем файл настроек user_settings.json
-    with open(user_settings_file, "r", encoding="utf-8") as f:
-        user_settings = json.load(f)
-    user_currencies = user_settings.get("user_currencies", [])
+    # Валидация и получение значения поля "user_currencies" из файла настроек "user_settings.json"
+    user_currencies = get_user_setting("user_currencies")
 
     # Проверка поля user_currencies в файле настроек "user_settings.json"
     if not isinstance(user_currencies, list):
@@ -201,13 +189,41 @@ def get_currency_rates() -> List[Dict[str, Any]]:
                 "rate": cbr_currencies[currency]["Value"],
 
                 # упрощённо: если брали из кэша, то from_cache=True
-                # "from_cache": from_cache
+                "from_cache": from_cache
             })
         else:
             pass
 
     return current_courses
 
+
+def get_stock_prices():
+    url_finnhub = "https://finnhub.io/api/v1/quote"
+    token = os.getenv("API_KEY_FINNHUB")
+
+    if not token:
+        raise RuntimeError("API ключ API_KEY_FINNHUB не найден в переменных окружения")
+
+    # Валидация и получение значения поля "user_stocks" из файла настроек "user_settings.json"
+    user_stocks = get_user_setting("user_stocks")
+
+    # Проверка поля user_currencies в файле настроек "user_settings.json"
+    if not isinstance(user_stocks, list):
+        raise ValueError("Ошибка! В файле <user_settings.json> поле user_currencies должно быть списком")
+
+    def fetch_quote(symbol):
+        response = requests.get(url_finnhub, params={
+            "symbol": symbol,
+            "token": token
+        })
+        response.raise_for_status()
+        return symbol, response.json().get("c")
+
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        result = dict(executor.map(fetch_quote, user_stocks))
+
+    
+    print(result)
 
 if __name__ == "__main__":
     # print(get_greeting("2021-12-25 15:01:01"))
