@@ -73,13 +73,12 @@ def page_events(date_str: str, time_range: str = "m"):
         df, date_str, time_range.lower()
     )
 
-    expenses = get_expenses(transactions_by_range)
 
     return {
-        "expenses": expenses,
-        "income": {},
-        "currency_rates": [],
-        "stock_prices": []
+        "expenses": get_expenses(transactions_by_range),
+        "income": get_income(transactions_by_range),
+        "currency_rates": get_currency_rates(),
+        "stock_prices": get_stock_prices()
     }
 
 def get_expenses(transactions_by_range):
@@ -158,6 +157,49 @@ def get_expenses(transactions_by_range):
         "total_amount": round(total_expenses, 2),
         "main": main.to_dict(orient="records"),
         "transfer_and_cash": transfers_and_cash.to_dict(orient="records")
+    }
+
+def get_income(transactions_by_range):
+    """
+    Вычисляет статистику по доходам из DataFrame с транзакциями.
+
+    Логика:
+        - Оставляет только положительные суммы (доходы).
+        - Агрегирует суммы по категориям.
+        - Сортирует категории по убыванию суммы.
+        - Возвращает общую сумму доходов и список категорий с суммами.
+
+    Параметры
+    ---------
+    transactions_by_range : DataFrame
+        DataFrame с транзакциями, обязательно должна быть колонка 'amount' и 'category'.
+
+    """
+    # 1. Создаём новый отфильтрованный ДатаФрейм по условию amount > 0
+    income_df = transactions_by_range[transactions_by_range["amount"] > 0].copy()
+
+    if income_df.empty:
+        return {
+            "total_amount": 0.0,
+            "main": []
+        }
+    # Сумма всех поступлений
+    total_amount = income_df["amount"].sum()
+
+    # 2. Агрегируем по категориям
+    group_by_category = (
+        income_df.groupby("category", dropna=False)["amount"]
+        .sum()
+        .reset_index()
+        .dropna(subset=["category"])
+        .sort_values(by="amount", ascending=False)
+    )
+
+    group_by_category["amount"] = group_by_category["amount"].round(2)
+
+    return {
+        "total_amount": round(total_amount, 2),
+        "main": group_by_category.to_dict(orient="records")
     }
 
 
