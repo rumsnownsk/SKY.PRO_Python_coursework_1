@@ -5,17 +5,18 @@ import pandas as pd
 import requests
 
 from datetime import datetime
-from typing import List, Dict, Any, Hashable, Optional
+from typing import List, Dict, Any, Hashable, Optional, Literal
 from pandas import DataFrame
 from concurrent.futures import ThreadPoolExecutor
 from src.config import CACHE_FILE_CBR, CACHE_FILE_FINNHUB
 from src.utils import load_transactions, _save_cache, _load_cache, get_user_setting
+from dotenv import load_dotenv
 
-# Кэш: храним весь ответ ЦБ целиком + время запроса
-_cbr_cache: Dict[str, Any] = {}
+# # Кэш: храним весь ответ ЦБ целиком + время запроса
+# _cbr_cache: Dict[str, Any] = {}
 
 
-def data_for_view_page(df: DataFrame, datetime_str):
+def page_main(datetime_str: str):
     """
     Формирует словарь данных для отображения на странице приветствия.
 
@@ -26,12 +27,14 @@ def data_for_view_page(df: DataFrame, datetime_str):
       - курсы валют (с кэшем ЦБ);
       - котировки акций (с кэшем Finnhub).
 
-    :param df: DataFrame с транзакциями.
     :param datetime_str: Строка даты в формате "YYYY-MM-DD HH:MM:SS".
     :return: Словарь с данными для фронтенда/шаблона.
     """
+    # загружаем транзакции из файла 'data/operations.xlsx'
+    df = load_transactions()
+
     # Получение ДатаФрейма транзакций с начала месяца до даты, указанной пользователем
-    transactions_by_range = get_transactions_by_date_range_df(df, datetime_str)
+    transactions_by_range = get_transactions_month_to_date_df(df, datetime_str)
 
     cards_data = group_transactions_by_cards(transactions_by_range)
     top_transactions = get_top_n_expensive_transactions(transactions_by_range)
@@ -43,6 +46,120 @@ def data_for_view_page(df: DataFrame, datetime_str):
         "currency_rates": get_currency_rates(),
         "stock_prices": get_stock_prices(),
     }
+
+def page_events(date_str: str, time_range: str = "m"):
+    """
+    Формирует данные для страницы событий (статистика по доходам/расходам, курсы и т.п.).
+
+    На текущем этапе реализует только блок расходов; блоки доходов, курсов валют
+    и акций возвращают пустые значения (заготовки под будущее расширение).
+
+    Логика расходов:
+        1. Загружает транзакции через load_transactions().
+        2. Фильтрует по дате и диапазону через get_transactions_by_date_range_df().
+        3. Передаёт отфильтрованный DataFrame в get_expenses() для расчёта статистики.
+
+    Параметры
+    ---------
+    date_str : str
+        Конечная дата периода в формате 'YYYY-MM-DD HH:MM:SS'.
+    time_range : str, optional
+        Диапазон периода: 'w' (неделя), 'm' (месяц), 'y' (год), 'all' (все данные).
+        По умолчанию — 'm'. Регистр не важен: функция приводит значение к нижнему.
+    """
+    # загружаем транзакции из файла 'data/operations.xlsx'
+    df = load_transactions()
+    transactions_by_range = get_transactions_by_date_range_df(
+        df, date_str, time_range.lower()
+    )
+
+    expenses = get_expenses(transactions_by_range)
+
+    return {
+        "expenses": expenses,
+        "income": {},
+        "currency_rates": [],
+        "stock_prices": []
+    }
+
+def get_expenses(transactions_by_range):
+    """
+    Вычисляет статистику по расходам из DataFrame с транзакциями.
+
+    Логика:
+        - Оставляет только отрицательные суммы (расходы).
+        - Преобразует их в положительные значения (модуль).
+        - Агрегирует по категории, сортирует по убыванию суммы.
+        - Выделяет топ‑5 категорий.
+        - Сумму остальных трат помещает в категорию «Остальные».
+        - Округляет все денежные значения до 2 знаков после запятой.
+
+    Параметры
+    ---------
+    transactions_by_range : DataFrame
+        DataFrame с транзакциями, обязательно должна быть колонка 'amount'.
+
+    Возвращает
+    ----------
+    dict
+        {
+            "total_amount": float,          # Общая сумма расходов (округлённая)
+            "main": [
+                {"category": str, "amount": float},
+                ...
+            ]                               # Топ‑5 + категория «Остальные»
+        }
+    """
+    # 1.  оставляем в ДатаФрейме только отрицательные значения, то бишь только Расходы
+    expenses_df = transactions_by_range[transactions_by_range["amount"] < 0].copy()
+
+    # Убираем минус у расходов: делаем модуль (абсолютное значение)
+    expenses_df["amount"] = expenses_df["amount"].abs()
+
+    # Определяем общий Расход за весь временной период
+    total_expenses = expenses_df["amount"].sum()
+
+    # 2. Агрегируем по категориям
+    grouped_by_category = (
+        expenses_df.groupby("category", dropna=False)["amount"]
+        .sum()
+        .reset_index()
+        .sort_values(by="amount", ascending=False)
+    )
+
+    # dropna по колонке category — через subset нужно передавать список
+    grouped_by_category = grouped_by_category.dropna(subset=["category"])
+
+    # 3. Выделяем Наличные и Переводы
+    mask_special = grouped_by_category["category"].isin(["Наличные", "Переводы"])
+    transfers_and_cash = grouped_by_category[mask_special].copy()
+    sum_transfers_and_cash = transfers_and_cash["amount"].sum()
+
+    # 4. Для топа берём всё, кроме Наличных и Переводов
+    main_candidates = grouped_by_category[~mask_special].copy()
+    top_5 = main_candidates.head(5)
+    sum_top_5 = top_5["amount"].sum()
+
+    # 5. Считаем сумму «Остальное»: из ВСЕХ расходов вычитаем топ‑5 и спец‑категории
+    rest_sum = total_expenses - sum_transfers_and_cash - sum_top_5
+
+
+    # 6. Создаём новую строку для «остальных»
+    rest_row = pd.DataFrame([{"category": "Остальное", "amount": round(rest_sum, 2)}])
+
+    # 7. Итоговый DataFrame: топ‑5 + «Остальные»
+    main = pd.concat([top_5, rest_row], ignore_index=True)
+
+    main["amount"] = main["amount"].round(2)
+    transfers_and_cash["amount"] = transfers_and_cash["amount"].round(2)
+
+    # print(transfer_and_cash_df)
+    return {
+        "total_amount": round(total_expenses, 2),
+        "main": main.to_dict(orient="records"),
+        "transfer_and_cash": transfers_and_cash.to_dict(orient="records")
+    }
+
 
 
 def get_greeting(datetime_str: str) -> str:
@@ -70,15 +187,15 @@ def get_greeting(datetime_str: str) -> str:
         return "Доброй ночи"
 
 
-def get_transactions_by_date_range_df(df: DataFrame, date_str: str) -> pd.DataFrame:
+def get_transactions_month_to_date_df(df: DataFrame, date_str: str) -> pd.DataFrame:
     """
-    Фильтрует DataFrame: оставляет транзакции с начала месяца по указанную дату.
+    Возвращает транзакции с начала месяца по указанную дату (Month-to-Date).
 
-    Начало месяца — 00:00:00 первого числа месяца указанной даты.
-    Конец диапазона — указанная дата.
+    Диапазон: [первое число месяца 00:00:00, указанная дата].
+    Пример: для '2020-05-20' вернёт данные за 2020-05-01 00:00:00 – 2020-05-20.
 
-    :param df: Исходный DataFrame с колонкой "date".
-    :param date_str: Конечная дата в формате "YYYY-MM-DD HH:MM:SS".
+    :param df: DataFrame с транзакциями и колонкой 'date' (datetime).
+    :param date_str: Конечная дата в формате 'YYYY-MM-DD HH:MM:SS'.
     :return: Отфильтрованный DataFrame.
     """
     end_date = datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")
@@ -88,6 +205,79 @@ def get_transactions_by_date_range_df(df: DataFrame, date_str: str) -> pd.DataFr
 
     return df.loc[mask]
 
+
+def get_transactions_by_date_range_df(
+        df: DataFrame,
+        date_str: str,
+        time_range: Literal["w", "m", "y", "all"] = "m") -> DataFrame:
+    """
+    Фильтрует транзакции по диапазону.
+
+    time_range:
+      'w' — неделя (с понедельника по дату)
+      'm' — месяц (с 1-го числа по дату) — по умолчанию
+      'y' — год (с 1 января по дату)
+      'all' — все данные от самой первой даты до указанной
+    """
+    if time_range.lower() not in {"w", "m", "y", "all"}:
+        raise ValueError(f"Недопустимое значение time_range: {time_range}. Допустимы: w, m, y, all")
+
+    # 1. Превращаем строку в реальную дату
+    try:
+        end_date = datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        raise ValueError(f"Неверный формат даты: {date_str}. Нужен YYYY-MM-DD HH:MM:SS")
+
+     # 2. Определяем start_date в зависимости от time_range
+    start_date = None
+
+    if time_range.lower() == "w":
+        # Неделя: находим понедельник этой недели (weekday() у понедельника = 0)
+        days_to_subtract = end_date.weekday()
+        start_date = end_date.replace(hour=0, minute=0, second=0, microsecond=0)
+        start_date -= pd.Timedelta(days=days_to_subtract)
+
+    elif time_range.lower() == "m":
+        # Месяц: первое число, 00:00:00
+        start_date = end_date.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+    elif time_range.lower() == "y":
+        # Год: 1 января, 00:00:00
+        start_date = end_date.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+
+    elif time_range.lower() == "all":
+        # ALL: берём самую раннюю дату из DataFrame
+
+        if df.empty:
+            return pd.DataFrame(columns=df.columns)
+
+        # Сначала убедимся, что колонка date — это datetime
+        temp_dates = (
+            pd.to_datetime(df["date"], dayfirst=True, errors="coerce")
+            if not pd.api.types.is_datetime64_any_dtype(df["date"])
+            else df["date"]
+        )
+
+        start_date = temp_dates.min()
+        if pd.isna(start_date):
+            return pd.DataFrame(columns=df.columns)
+    else:
+        raise ValueError(f"Недопустимое значение time_range: {time_range}. Допустимы: w, m, y, all")
+
+    # 3. Подготовка DataFrame: приводим колонку date к типу datetime
+    # Делаем копию, чтобы не менять оригинал снаружи
+    work_df = df.copy()
+
+    if not pd.api.types.is_datetime64_any_dtype(work_df["date"]):
+        work_df["date"] = pd.to_datetime(work_df["date"], dayfirst=True, errors="coerce")
+
+    # Удаляем строки, где дата не распарсилась (стала NaT)
+    work_df = work_df.dropna(subset=["date"])
+
+    # 4. Маска и фильтрация
+    mask = (work_df["date"] >= start_date) & (work_df["date"] <= end_date)
+
+    return work_df.loc[mask]
 
 def get_top_n_expensive_transactions(df: pd.DataFrame, top_n: int = 5) -> list[dict[Hashable, Any]]:
     """
@@ -294,7 +484,6 @@ def get_stock_prices():
 
         raw_data = {sym: price for sym, price in results if price is not None}
 
-        # stock_prices = [{"stock": k, "price": v, "from_cache": from_cache} for k, v in response.items()]
         _save_cache(file_path=CACHE_FILE_FINNHUB, data={"data": raw_data, "timestamp": time.time()})
 
     # 3. Формируем итоговый список
@@ -307,6 +496,7 @@ def get_stock_prices():
 
 
 if __name__ == "__main__":
-    # print(get_greeting("2021-12-25 15:01:01"))
-    print(json.dumps(data_for_view_page(load_transactions(), "2021-12-31 15:01:01"), indent=2, ensure_ascii=False))
-    # group_transactions_by_cards(load_transactions())
+    load_dotenv()
+
+    # print("⚠️", json.dumps(page_main("2021-12-31 15:01:01"), indent=2, ensure_ascii=False))
+    print(json.dumps(page_events("2020-11-30 15:01:01", "Y"), indent=2, ensure_ascii=False))
