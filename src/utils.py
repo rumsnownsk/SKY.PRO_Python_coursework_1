@@ -78,10 +78,12 @@ def load_transactions(filename: str = "operations.xlsx", base_dir: Path | None =
     col_map_normalized = {k.strip().lower(): v for k, v in COL_MAP.items()}
 
     df = df.rename(columns=col_map_normalized)
-
-    df["card_last_4"] = (
-        df["mask_card_number"].astype(str).str.extract(r"(\d{4})$")  # Берёт ровно 4 цифры в конце строки
-    )
+    if "mask_card_number" in df.columns:
+        df["card_last_4"] = (
+            df["mask_card_number"].astype(str).str.extract(r"(\d{4})$")  # Берёт ровно 4 цифры в конце строки
+        )
+    else:
+        df["card_last_4"] = pd.NA
 
     # Приводим колонку "Дата операции" к datetime с правильным порядком день/месяц
     df["date"] = pd.to_datetime(df["date"], dayfirst=True, errors="coerce")
@@ -97,24 +99,24 @@ def load_transactions(filename: str = "operations.xlsx", base_dir: Path | None =
 
 def _load_cache(file_path) -> Optional[Dict[str, Any]]:
     """
-        Загружает кэш из JSON-файла, если он существует и не устарел.
+    Загружает кэш из JSON-файла, если он существует и не устарел.
 
-        Логика:
-            - Если файла нет — возвращает None.
-            - Если файл есть, проверяет наличие поля "timestamp".
-            - Вычисляет возраст кэша и сравнивает с CACHE_TTL.
-            - Возвращает только данные (поле "data"), если кэш валиден.
+    Логика:
+        - Если файла нет — возвращает None.
+        - Если файл есть, проверяет наличие поля "timestamp".
+        - Вычисляет возраст кэша и сравнивает с CACHE_TTL.
+        - Возвращает только данные (поле "data"), если кэш валиден.
 
-        Параметры
-        ---------
-        file_path : Path
-            Путь к файлу кэша.
+    Параметры
+    ---------
+    file_path : Path
+        Путь к файлу кэша.
 
-        Возвращает
-        ----------
-        dict | None
-            Словарь с данными кэша, если кэш валиден; иначе None.
-        """
+    Возвращает
+    ----------
+    dict | None
+        Словарь с данными кэша, если кэш валиден; иначе None.
+    """
     if not file_path.exists():
         return None
     try:
@@ -134,19 +136,19 @@ def _load_cache(file_path) -> Optional[Dict[str, Any]]:
 
 def _save_cache(file_path, data: Dict[str, Any]) -> None:
     """
-        Сохраняет данные в JSON-файл с созданием родительских директорий.
+    Сохраняет данные в JSON-файл с созданием родительских директорий.
 
-        Перед записью создаёт все недостающие директории (parents=True).
-        Данные сохраняются с отступами (indent=2) и поддержкой Unicode (ensure_ascii=False).
+    Перед записью создаёт все недостающие директории (parents=True).
+    Данные сохраняются с отступами (indent=2) и поддержкой Unicode (ensure_ascii=False).
 
-        Параметры
-        ---------
-        file_path : Path
-            Полный путь к файлу кэша (включая имя файла).
-        data : dict
-            Данные для сохранения. Обычно ожидается структура:
-            {"data": {...}, "timestamp": <float>}
-        """
+    Параметры
+    ---------
+    file_path : Path
+        Полный путь к файлу кэша (включая имя файла).
+    data : dict
+        Данные для сохранения. Обычно ожидается структура:
+        {"data": {...}, "timestamp": <float>}
+    """
     file_path.parent.mkdir(parents=True, exist_ok=True)
 
     with file_path.open("w", encoding="utf-8") as f:
@@ -155,31 +157,31 @@ def _save_cache(file_path, data: Dict[str, Any]) -> None:
 
 def get_user_setting(field) -> Any:
     """
-        Получает значение указанного поля из файла user_settings.json.
+    Получает значение указанного поля из файла user_settings.json.
 
-        Логика:
-            - Определяет путь к файлу настроек относительно PROJECT_ROOT.
-            - Проверяет существование файла и его непустоту.
-            - Читает JSON и возвращает значение по ключу.
-            - По умолчанию возвращает пустой список, если ключ не найден.
+    Логика:
+        - Определяет путь к файлу настроек относительно PROJECT_ROOT.
+        - Проверяет существование файла и его непустоту.
+        - Читает JSON и возвращает значение по ключу.
+        - По умолчанию возвращает пустой список, если ключ не найден.
 
-        Параметры
-        ---------
-        field : str
-            Ключ поля, которое нужно получить из настроек.
+    Параметры
+    ---------
+    field : str
+        Ключ поля, которое нужно получить из настроек.
 
-        Возвращает
-        ----------
-        Any
-            Значение поля из JSON. Если поле не найдено — возвращается [].
+    Возвращает
+    ----------
+    Any
+        Значение поля из JSON. Если поле не найдено — возвращается [].
 
-        Исключения
-        ----------
-        FileNotFoundError
-            Если файл user_settings.json не найден.
-        ValueError
-            Если файл настроек существует, но пустой.
-        """
+    Исключения
+    ----------
+    FileNotFoundError
+        Если файл user_settings.json не найден.
+    ValueError
+        Если файл настроек существует, но пустой.
+    """
     # определяем где лежит сам файл user_settings.json
     user_settings_file = PROJECT_ROOT / "src/user_settings.json"
 
@@ -214,16 +216,14 @@ def logger(module_name: str = "no_name") -> logging.Logger:
 
     # ПРОВЕРКА: если у этого логгера ещё нет обработчика для файла — добавляем
     if not logger_obj.handlers:
-        file_handler = logging.FileHandler(log_file, encoding="utf-8",
-                                           mode="a")  # 'a' — дописывать, а не перезаписывать
+        file_handler = logging.FileHandler(
+            log_file, encoding="utf-8", mode="a"
+        )  # 'a' — дописывать, а не перезаписывать
         # Чуть почище формат: без лишних переносов, но с разделителем
-        formatter = logging.Formatter(
-            f"%(asctime)s | %(name)s | %(levelname)s | %(message)s\n{'=' * 60}"
-        )
+        formatter = logging.Formatter(f"%(asctime)s | %(name)s | %(levelname)s | %(message)s\n{'=' * 60}")
         file_handler.setFormatter(formatter)
         logger_obj.addHandler(file_handler)
     else:
         # Опционально: можно вывести в консоль, что логгер уже настроен (для отладки самого логгера)
         pass
     return logger_obj
-

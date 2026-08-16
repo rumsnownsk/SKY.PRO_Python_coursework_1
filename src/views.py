@@ -10,10 +10,11 @@ import requests
 from dotenv import load_dotenv
 from pandas import DataFrame
 
-from src.config import CACHE_FILE_CBR, CACHE_FILE_FINNHUB
+from src.config import CACHE_FILE_CBR, CACHE_FILE_FINNHUB, CACHE_TTL
 from src.utils import _load_cache, _save_cache, get_user_setting, load_transactions, logger
 
 logger_views = logger("views")
+
 
 def page_main(datetime_str: str) -> Dict[str, Any]:
     """
@@ -151,6 +152,14 @@ def get_expenses(transactions_by_range) -> Dict[str, Any]:
     # 1.  оставляем в ДатаФрейме только отрицательные значения, то бишь только Расходы
     expenses_df = transactions_by_range[transactions_by_range["amount"] < 0].copy()
 
+    if expenses_df.empty:
+        # ВАЖНО: если нет расходов вообще — сразу возвращаем пустой результат
+        logger_views.debug("[get_expenses] Нет расходов, возвращаем пустые структуры.")
+        return {
+            "total_amount": 0,
+            "main": [],
+            "transfer_and_cash": [],
+        }
     # Убираем минус у расходов: делаем модуль (абсолютное значение)
     expenses_df["amount"] = expenses_df["amount"].abs()
 
@@ -375,11 +384,7 @@ def get_top_n_expensive_transactions(df: pd.DataFrame, top_n: int = 5) -> list[d
         return []
 
     # 2. Сортируем по модулю суммы (amount) , по убыванию
-    sorted_df = work_df.sort_values(
-        by="amount",
-        key=lambda x: x.abs(),
-        ascending=False
-    )
+    sorted_df = work_df.sort_values(by="amount", key=lambda x: x.abs(), ascending=False)
 
     # 3. Берем топ-N строк
     top_transactions = sorted_df.head(top_n).copy()
@@ -453,10 +458,7 @@ def group_transactions_by_cards(df: DataFrame) -> List[Dict[str, Any]]:
     # 4. Агрегируем: считаем сумму расходов и кэшбэка
     # - total_spend: сумма amount (она отрицательная), потом возьмём модуль
     # - cashback: обычная сумма
-    agg_df = grouped.agg(
-        total_spend=("amount", "sum"),
-        cashback=("cashback", "sum")
-    ).reset_index()
+    agg_df = grouped.agg(total_spend=("amount", "sum"), cashback=("cashback", "sum")).reset_index()
 
     # 5. Убираем минус у расходов: делаем модуль (абсолютное значение)
     agg_df["total_spend"] = agg_df["total_spend"].abs().round(2)
@@ -485,8 +487,19 @@ def get_currency_rates() -> List[Dict[str, Any]]:
         raise ValueError("Ошибка! В файле <user_settings.json> поле user_currencies должно быть списком")
 
     # 1. Пытаемся загрузить кэш с диска
+
     cbr_data = _load_cache(CACHE_FILE_CBR)
     from_cache = False
+
+    if isinstance(cbr_data, dict) and "data" in cbr_data:
+        if time.time() - cbr_data["timestamp"] <= CACHE_TTL:
+            # Кэш свежий → берём данные
+            cbr_data = cbr_data["data"]
+            from_cache = True
+        else:
+            # Кэш устарел → игнорируем его, будем запрашивать заново
+            cbr_data = None
+            from_cache = False
 
     # 2. Если нет свежих данных — делаем ровно ОДИН запрос к ЦБ
     if cbr_data is None:
@@ -503,8 +516,7 @@ def get_currency_rates() -> List[Dict[str, Any]]:
 
         # Сохраняем весь ответ в кэш вместе с временем
         _save_cache(file_path=CACHE_FILE_CBR, data={"data": cbr_data, "timestamp": time.time()})
-    else:
-        from_cache = True
+        from_cache = False
 
     cbr_currencies = cbr_data.get("Valute", {})
 
