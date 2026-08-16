@@ -66,3 +66,5 @@ ignore_errors = true
 [tool.isort]
 # максимальная длина строки
 line_length = 119
+profile = "black"
+src_paths = ["src"]

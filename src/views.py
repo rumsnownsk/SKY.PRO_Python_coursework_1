@@ -1,53 +1,84 @@
 import json
 import os
 import time
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
+from typing import Any, Dict, Hashable, List, Literal, Optional
+
 import pandas as pd
 import requests
-
-from datetime import datetime
-from typing import List, Dict, Any, Hashable, Optional, Literal
-from pandas import DataFrame
-from concurrent.futures import ThreadPoolExecutor
-from src.config import CACHE_FILE_CBR, CACHE_FILE_FINNHUB
-from src.utils import load_transactions, _save_cache, _load_cache, get_user_setting
 from dotenv import load_dotenv
+from pandas import DataFrame
 
-# # Кэш: храним весь ответ ЦБ целиком + время запроса
-# _cbr_cache: Dict[str, Any] = {}
+from src.config import CACHE_FILE_CBR, CACHE_FILE_FINNHUB
+from src.utils import _load_cache, _save_cache, get_user_setting, load_transactions, logger
 
+logger_views = logger("views")
 
-def page_main(datetime_str: str):
+def page_main(datetime_str: str) -> Dict[str, Any]:
     """
     Формирует словарь данных для отображения на странице приветствия.
 
-    Собирает:
-      - приветствие по времени суток;
+    Собирает и возвращает комплексную сводку:
+      - приветствие, зависящее от времени суток;
       - статистику по картам (расходы и кэшбэк);
-      - топ самых дорогих транзакций;
-      - курсы валют (с кэшем ЦБ);
-      - котировки акций (с кэшем Finnhub).
+      - топ самых дорогих транзакций за период;
+      - актуальные курсы валют (из кэша ЦБ РФ);
+      - котировки акций (из кэша Finnhub).
 
-    :param datetime_str: Строка даты в формате "YYYY-MM-DD HH:MM:SS".
-    :return: Словарь с данными для фронтенда/шаблона.
+    Период расчёта статистики: с начала месяца до указанной даты (включительно).
+
+    Параметры
+    ---------
+    datetime_str : str
+        Дата и время в формате "YYYY-MM-DD HH:MM:SS". Используется для определения
+        времени суток (для приветствия) и верхней границы периода выборки транзакций.
+
+    Возвращает
+    ----------
+    dict
+        Словарь со следующей структурой:
+        {
+            "greeting": str,                 # Приветствие (например, "Доброе утро")
+            "cards": dict | list,            # Статистика по картам (зависит от реализации group_transactions_by_cards)
+            "top_transactions": list,         # Топ N самых дорогих транзакций
+            "currency_rates": list | dict,    # Курсы валют (зависит от get_currency_rates)
+            "stock_prices": list | dict       # Котировки акций (зависит от get_stock_prices)
+        }
+
+    Примечания
+    ----------
+    - Предполагается, что все вспомогательные функции (load_transactions,
+      get_transactions_month_to_date_df и др.) уже определены в текущем модуле.
+    - Если в исходных данных нет транзакций за указанный период, функции вернут
+      пустые структуры (пустой список/словарь), функция не должна падать с ошибкой.
     """
     # загружаем транзакции из файла 'data/operations.xlsx'
-    df = load_transactions()
+    logger_views.info(f"[page_main] Вход. Дата: {datetime_str}")
 
-    # Получение ДатаФрейма транзакций с начала месяца до даты, указанной пользователем
-    transactions_by_range = get_transactions_month_to_date_df(df, datetime_str)
+    try:
+        df = load_transactions()
+        logger_views.debug(f"[page_main] Загружено строк: {len(df)}")
 
-    cards_data = group_transactions_by_cards(transactions_by_range)
-    top_transactions = get_top_n_expensive_transactions(transactions_by_range)
+        # Получение ДатаФрейма транзакций с начала месяца до даты, указанной пользователем
+        transactions_by_range = get_transactions_month_to_date_df(df, datetime_str)
 
-    return {
-        "greeting": get_greeting(datetime_str),
-        "cards": cards_data,
-        "top_transactions": top_transactions,
-        "currency_rates": get_currency_rates(),
-        "stock_prices": get_stock_prices(),
-    }
+        cards_data = group_transactions_by_cards(transactions_by_range)
+        top_transactions = get_top_n_expensive_transactions(transactions_by_range)
 
-def page_events(date_str: str, time_range: str = "m"):
+        return {
+            "greeting": get_greeting(datetime_str),
+            "cards": cards_data,
+            "top_transactions": top_transactions,
+            "currency_rates": get_currency_rates(),
+            "stock_prices": get_stock_prices(),
+        }
+    except Exception as e:
+        logger_views.error(f"[page_main] Критическая ошибка: {e}", exc_info=True)
+        raise
+
+
+def page_events(date_str: str, time_range: str = "m") -> Dict[str, Any]:
     """
     Формирует данные для страницы событий (статистика по доходам/расходам, курсы и т.п.).
 
@@ -68,20 +99,26 @@ def page_events(date_str: str, time_range: str = "m"):
         По умолчанию — 'm'. Регистр не важен: функция приводит значение к нижнему.
     """
     # загружаем транзакции из файла 'data/operations.xlsx'
-    df = load_transactions()
-    transactions_by_range = get_transactions_by_date_range_df(
-        df, date_str, time_range.lower()
-    )
+    logger_views.info(f"[page_events] Вход. Дата: {date_str}, диапазон: {time_range}")
+    try:
+        df = load_transactions()
+        logger_views.debug(f"[page_events] Загружено строк: {len(df)}")
+
+        transactions_by_range = get_transactions_by_date_range_df(df, date_str, time_range.lower())
+        logger_views.info("[page_events] Страница событий сформирована.")
+
+        return {
+            "expenses": get_expenses(transactions_by_range),
+            "income": get_income(transactions_by_range),
+            "currency_rates": get_currency_rates(),
+            "stock_prices": get_stock_prices(),
+        }
+    except Exception as e:
+        logger_views.error(f"[page_events] Критическая ошибка: {e}", exc_info=True)
+        raise
 
 
-    return {
-        "expenses": get_expenses(transactions_by_range),
-        "income": get_income(transactions_by_range),
-        "currency_rates": get_currency_rates(),
-        "stock_prices": get_stock_prices()
-    }
-
-def get_expenses(transactions_by_range):
+def get_expenses(transactions_by_range) -> Dict[str, Any]:
     """
     Вычисляет статистику по расходам из DataFrame с транзакциями.
 
@@ -109,6 +146,8 @@ def get_expenses(transactions_by_range):
             ]                               # Топ‑5 + категория «Остальные»
         }
     """
+    logger_views.debug(f"[get_expenses] Вход. Строк в DataFrame: {len(transactions_by_range)}")
+
     # 1.  оставляем в ДатаФрейме только отрицательные значения, то бишь только Расходы
     expenses_df = transactions_by_range[transactions_by_range["amount"] < 0].copy()
 
@@ -142,24 +181,25 @@ def get_expenses(transactions_by_range):
     # 5. Считаем сумму «Остальное»: из ВСЕХ расходов вычитаем топ‑5 и спец‑категории
     rest_sum = total_expenses - sum_transfers_and_cash - sum_top_5
 
-
     # 6. Создаём новую строку для «остальных»
-    rest_row = pd.DataFrame([{"category": "Остальное", "amount": round(rest_sum, 2)}])
+    rest_row = pd.DataFrame([{"category": "Остальное", "amount": round(rest_sum, 0)}])
 
     # 7. Итоговый DataFrame: топ‑5 + «Остальные»
     main = pd.concat([top_5, rest_row], ignore_index=True)
 
-    main["amount"] = main["amount"].round(2)
-    transfers_and_cash["amount"] = transfers_and_cash["amount"].round(2)
+    main["amount"] = main["amount"].round(0).astype(int)
+    transfers_and_cash["amount"] = transfers_and_cash["amount"].round(0).astype(int)
 
-    # print(transfer_and_cash_df)
+    logger_views.debug(f"[get_expenses] Результат: total={int(round(total_expenses, 0))}, main={len(main)} категорий.")
+
     return {
-        "total_amount": round(total_expenses, 2),
+        "total_amount": int(round(total_expenses, 0)),
         "main": main.to_dict(orient="records"),
-        "transfer_and_cash": transfers_and_cash.to_dict(orient="records")
+        "transfer_and_cash": transfers_and_cash.to_dict(orient="records"),
     }
 
-def get_income(transactions_by_range):
+
+def get_income(transactions_by_range) -> Dict[str, Any]:
     """
     Вычисляет статистику по доходам из DataFrame с транзакциями.
 
@@ -167,7 +207,7 @@ def get_income(transactions_by_range):
         - Оставляет только положительные суммы (доходы).
         - Агрегирует суммы по категориям.
         - Сортирует категории по убыванию суммы.
-        - Возвращает общую сумму доходов и список категорий с суммами.
+        - Все денежные значения округляются до целого числа (без копеек).
 
     Параметры
     ---------
@@ -179,10 +219,7 @@ def get_income(transactions_by_range):
     income_df = transactions_by_range[transactions_by_range["amount"] > 0].copy()
 
     if income_df.empty:
-        return {
-            "total_amount": 0.0,
-            "main": []
-        }
+        return {"total_amount": 0, "main": []}
     # Сумма всех поступлений
     total_amount = income_df["amount"].sum()
 
@@ -195,13 +232,9 @@ def get_income(transactions_by_range):
         .sort_values(by="amount", ascending=False)
     )
 
-    group_by_category["amount"] = group_by_category["amount"].round(2)
+    group_by_category["amount"] = group_by_category["amount"].round(0).astype(int)
 
-    return {
-        "total_amount": round(total_amount, 2),
-        "main": group_by_category.to_dict(orient="records")
-    }
-
+    return {"total_amount": int(round(total_amount, 0)), "main": group_by_category.to_dict(orient="records")}
 
 
 def get_greeting(datetime_str: str) -> str:
@@ -249,9 +282,8 @@ def get_transactions_month_to_date_df(df: DataFrame, date_str: str) -> pd.DataFr
 
 
 def get_transactions_by_date_range_df(
-        df: DataFrame,
-        date_str: str,
-        time_range: Literal["w", "m", "y", "all"] = "m") -> DataFrame:
+    df: DataFrame, date_str: str, time_range: Literal["w", "m", "y", "all"] = "m"
+) -> DataFrame:
     """
     Фильтрует транзакции по диапазону.
 
@@ -270,7 +302,7 @@ def get_transactions_by_date_range_df(
     except ValueError:
         raise ValueError(f"Неверный формат даты: {date_str}. Нужен YYYY-MM-DD HH:MM:SS")
 
-     # 2. Определяем start_date в зависимости от time_range
+    # 2. Определяем start_date в зависимости от time_range
     start_date = None
 
     if time_range.lower() == "w":
@@ -321,6 +353,7 @@ def get_transactions_by_date_range_df(
 
     return work_df.loc[mask]
 
+
 def get_top_n_expensive_transactions(df: pd.DataFrame, top_n: int = 5) -> list[dict[Hashable, Any]]:
     """
     Возвращает список топ-N самых дорогих транзакций по модулю суммы.
@@ -339,20 +372,14 @@ def get_top_n_expensive_transactions(df: pd.DataFrame, top_n: int = 5) -> list[d
     work_df = df.copy()
 
     # 2. Сортируем по модулю суммы (amount) , по убыванию
-    sorted_df = work_df.sort_values(
-        by="amount",
-        key=abs,
-        ascending=False
-    )
+    sorted_df = work_df.sort_values(by="amount", key=abs, ascending=False)
 
     # 3. Берем топ-N строк
     top_transactions = sorted_df.head(top_n).copy()
 
     # 4. Оставляем ТОЛЬКО нужные колонки
     available_columns = [
-        col
-        for col in ["date", "amount", "category", "description"]
-        if col in top_transactions.columns
+        col for col in ["date", "amount", "category", "description"] if col in top_transactions.columns
     ]
     top_transactions = top_transactions[available_columns]
 
@@ -361,33 +388,46 @@ def get_top_n_expensive_transactions(df: pd.DataFrame, top_n: int = 5) -> list[d
         top_transactions["mask_card_number"] = (
             top_transactions["mask_card_number"]
             .astype(str)
-            .str.extract(r'(\d+)')  # берёт первую последовательность цифр
+            .str.extract(r"(\d+)")  # берёт первую последовательность цифр
         )
 
     # Форматируем дату: из datetime → строка "21.12.2021"
     if "date" in top_transactions.columns:
         # Защита: если вдруг там не дата, а строка - то ничего не ломаемся
         if not pd.api.types.is_datetime64_any_dtype(top_transactions["date"]):
-            top_transactions["date"] = pd.to_datetime(
-                top_transactions["date"],
-                dayfirst=True,
-                errors="coerce"
-            )
+            top_transactions["date"] = pd.to_datetime(top_transactions["date"], dayfirst=True, errors="coerce")
 
         top_transactions["date"] = top_transactions["date"].dt.strftime("%d.%m.%Y")
 
     return top_transactions.to_dict(orient="records")
 
 
-def group_transactions_by_cards(df: DataFrame):
+def group_transactions_by_cards(df: DataFrame) -> List[Dict[str, Any]]:
     """
-    Группирует транзакции по последним 4 цифрам карты, считает расходы и кэшбэк.
+    Группирует транзакции по последним 4 цифрам карты и агрегирует расходы и кэшбэк.
 
-    Оставляются только строки с заполненным card_last_4 и отрицательной суммой (расходы).
-    Суммы расходов приводятся к положительному значению (модуль).
+    Логика:
+        - Оставляются только строки с заполненным значением в колонке `card_last_4`.
+        - Учитываются только расходные операции: строки, где `amount < 0`.
+        - Суммы расходов приводятся к положительному значению (модуль).
+        - Для каждой карты считаются:
+            * total_spend — сумма расходов (по модулю);
+            * cashback — сумма кэшбэка.
 
-    :param df: DataFrame транзакций с колонками card_last_4, amount, cashback.
-    :return: Список словарей: [{"last_digits": "...", "total_spend": ..., "cashback": ...}, ...]
+    Параметры
+    ---------
+    df : DataFrame
+        DataFrame транзакций. Обязательные колонки: `card_last_4`, `amount`, `cashback`.
+    Возвращает
+    ----------
+    list[dict]
+        Список словарей вида:
+        [
+            {"last_digits": "1234", "total_spend": 1500.0, "cashback": 50.0},
+            ...
+        ]
+        Если подходящих транзакций нет — возвращается пустой список [].
+
     """
     # Оставляем только строки, где есть номер карты
     df_clean = df.dropna(subset=["card_last_4"]).copy()
@@ -398,19 +438,17 @@ def group_transactions_by_cards(df: DataFrame):
     # 1. Фильтруем только расходы: оставляем строки, где payment_amount < 0
     expenses_df = df_clean[df_clean["amount"] < 0].copy()
 
-    if expenses_df.empty: return []
+    if expenses_df.empty:
+        return []
 
     # 2. Группируем по чистым последним 4 цифрам
     grouped = expenses_df.groupby("card_last_4", dropna=False)
 
     # 3. Агрегируем: считаем сумму расходов и кэшбэка
-    agg_df = grouped.agg(
-        total_spend=("amount", "sum"),
-        cashback=("cashback", "sum")
-    ).reset_index()
+    agg_df = grouped.agg(total_spend=("amount", "sum"), cashback=("cashback", "sum")).reset_index()
 
     # 4. Убираем минус у расходов: делаем модуль (абсолютное значение)
-    agg_df["total_spend"] = agg_df['total_spend'].abs().round(2)
+    agg_df["total_spend"] = agg_df["total_spend"].abs().round(2)
 
     # 5. Переименовываем колонку для JSON-ответа
     agg_df = agg_df.rename(columns={"card_last_4": "last_digits"})
@@ -461,28 +499,54 @@ def get_currency_rates() -> List[Dict[str, Any]]:
     current_courses = []
     for currency in user_currencies:
         if currency in cbr_currencies:
-            current_courses.append({
-                "currency": currency,
-                "rate": cbr_currencies[currency]["Value"],
-
-                # упрощённо: если брали из кэша, то from_cache=True
-                "from_cache": from_cache
-            })
+            current_courses.append(
+                {
+                    "currency": currency,
+                    "rate": cbr_currencies[currency]["Value"],
+                    # упрощённо: если брали из кэша, то from_cache=True
+                    "from_cache": from_cache,
+                }
+            )
         else:
             pass
 
     return current_courses
 
 
-def get_stock_prices():
+def get_stock_prices() -> List[Dict[str, Any]]:
     """
-    Получает котировки акций для списка user_stocks из настроек.
+    Получает актуальные котировки акций для списка тикеров из пользовательских настроек.
 
-    Использует дисковый кэш по времени. Если кэш устарел или отсутствует,
-    параллельно запрашивает котировки для всех тикеров (до 5 потоков).
-    Один упавший тикер не ломает весь результат.
+    Логика работы:
+        - Считывает список тикеров из поля `user_stocks` в файле `user_settings.json`.
+        - Пытается загрузить данные из дискового кэша. Если кэш есть и не устарел — использует его.
+        - Если кэша нет или он пустой — параллельно запрашивает котировки для всех тикеров
+          (до 5 потоков). Ошибка по одному тикеру не ломает весь запрос.
+        - Сохраняет свежие данные в кэш.
 
-    :return: Список словарей вида: [{"stock": "AAPL", "price": 192.5, "from_cache": True}, ...]
+    Параметры
+    ---------
+    Нет. Все параметры (токен, список тикеров, путь к кэшу) берутся из окружения
+    и внешних конфигураций.
+
+    Возвращает
+    ----------
+    list[dict]
+        Список словарей с котировками вида:
+        [
+            {"stock": "AAPL", "price": 192.5, "from_cache": True},
+            {"stock": "MSFT", "price": 378.2, "from_cache": False},
+            ...
+        ]
+        Если ни один тикер не удалось обработать, возвращается пустой список [].
+
+    Исключения
+    ----------
+    RuntimeError
+        Если не найден API-ключ в переменной окружения `API_KEY_FINNHUB`.
+    ValueError
+        Если поле `user_stocks` в `user_settings.json` не является списком.
+
     """
     url_finnhub = "https://finnhub.io/api/v1/quote"
     token = os.getenv("API_KEY_FINNHUB")
@@ -508,6 +572,7 @@ def get_stock_prices():
 
     # 2. Если кэша нет или он битый — делаем запросы
     if raw_data is None:
+
         def fetch_quote(symbol):
             try:
                 response = requests.get(
@@ -530,8 +595,7 @@ def get_stock_prices():
 
     # 3. Формируем итоговый список
     stock_prices: List[Dict[str, Any]] = [
-        {"stock": sym, "price": price, "from_cache": from_cache}
-        for sym, price in raw_data.items()
+        {"stock": sym, "price": price, "from_cache": from_cache} for sym, price in raw_data.items()
     ]
 
     return stock_prices
