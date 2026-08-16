@@ -370,9 +370,16 @@ def get_top_n_expensive_transactions(df: pd.DataFrame, top_n: int = 5) -> list[d
 
     # 1. Делаем копию, чтобы не менять оригинал
     work_df = df.copy()
+    work_df = work_df[work_df["amount"] < 0]
+    if work_df.empty or top_n <= 0:
+        return []
 
     # 2. Сортируем по модулю суммы (amount) , по убыванию
-    sorted_df = work_df.sort_values(by="amount", key=abs, ascending=False)
+    sorted_df = work_df.sort_values(
+        by="amount",
+        key=lambda x: x.abs(),
+        ascending=False
+    )
 
     # 3. Берем топ-N строк
     top_transactions = sorted_df.head(top_n).copy()
@@ -398,7 +405,6 @@ def get_top_n_expensive_transactions(df: pd.DataFrame, top_n: int = 5) -> list[d
             top_transactions["date"] = pd.to_datetime(top_transactions["date"], dayfirst=True, errors="coerce")
 
         top_transactions["date"] = top_transactions["date"].dt.strftime("%d.%m.%Y")
-
     return top_transactions.to_dict(orient="records")
 
 
@@ -429,28 +435,34 @@ def group_transactions_by_cards(df: DataFrame) -> List[Dict[str, Any]]:
         Если подходящих транзакций нет — возвращается пустой список [].
 
     """
-    # Оставляем только строки, где есть номер карты
+    # 1. Оставляем только строки, где есть номер карты
     df_clean = df.dropna(subset=["card_last_4"]).copy()
 
     if df_clean.empty:
         return []
 
-    # 1. Фильтруем только расходы: оставляем строки, где payment_amount < 0
+    # 2. Фильтруем только расходы: оставляем строки, где payment_amount < 0
     expenses_df = df_clean[df_clean["amount"] < 0].copy()
 
     if expenses_df.empty:
         return []
 
-    # 2. Группируем по чистым последним 4 цифрам
+    # 3. Группируем по чистым последним 4 цифрам
     grouped = expenses_df.groupby("card_last_4", dropna=False)
 
-    # 3. Агрегируем: считаем сумму расходов и кэшбэка
-    agg_df = grouped.agg(total_spend=("amount", "sum"), cashback=("cashback", "sum")).reset_index()
+    # 4. Агрегируем: считаем сумму расходов и кэшбэка
+    # - total_spend: сумма amount (она отрицательная), потом возьмём модуль
+    # - cashback: обычная сумма
+    agg_df = grouped.agg(
+        total_spend=("amount", "sum"),
+        cashback=("cashback", "sum")
+    ).reset_index()
 
-    # 4. Убираем минус у расходов: делаем модуль (абсолютное значение)
+    # 5. Убираем минус у расходов: делаем модуль (абсолютное значение)
     agg_df["total_spend"] = agg_df["total_spend"].abs().round(2)
+    agg_df["cashback"] = agg_df["cashback"].round(2)
 
-    # 5. Переименовываем колонку для JSON-ответа
+    # 6. Переименовываем колонку для JSON-ответа
     agg_df = agg_df.rename(columns={"card_last_4": "last_digits"})
 
     return agg_df.to_dict(orient="records")
