@@ -86,7 +86,11 @@ def get_transactions_with_phone(df_tr: pd.DataFrame) -> List[Dict[str, Any]]:
     :param df_tr:
     :return:
     """
-    pattern = r"\+7 \d{3} \d{2,3}-\d{2}-\d{2}"
+    pattern = r'(?:\+?7|8)[\s\-()]*\d{3}[\s\-()]*\d{2,3}[\s\-()]*\d{2}[\s\-()]*\d{2}'
+
+    # Защита: если колонки нет — сразу пустой список
+    if "description" not in df_tr.columns:
+        return []
 
     mask = df_tr["description"].str.contains(pattern, regex=True, na=False)
     with_phone = df_tr[mask].copy()
@@ -101,7 +105,9 @@ def get_transactions_with_phone(df_tr: pd.DataFrame) -> List[Dict[str, Any]]:
             with_phone["date"] = pd.to_datetime(with_phone["date"], errors="coerce")
         with_phone["date"] = with_phone["date"].dt.strftime("%Y-%m-%d")
 
-    with_phone = with_phone.replace({np.nan: None})
+    # with_phone = with_phone.replace({np.nan: None})
+    # Заменяем NaN на None для JSON-совместимости
+    with_phone = with_phone.where(pd.notnull(with_phone), None)
 
     return with_phone.to_dict(orient="records")
 
