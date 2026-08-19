@@ -363,7 +363,7 @@ def get_transactions_by_date_range_df(
     return work_df.loc[mask]
 
 
-def get_top_n_expensive_transactions(df: pd.DataFrame, top_n: int = 5) -> list[dict[Hashable, Any]]:
+def get_top_n_expensive_transactions(df: pd.DataFrame, top_n: int = 7) -> list[dict[Hashable, Any]]:
     """
     Возвращает список топ-N самых дорогих транзакций по модулю суммы.
 

@@ -1,9 +1,9 @@
 {
   "data": {
-    "Date": "2026-08-15T11:30:00+03:00",
-    "PreviousDate": "2026-08-14T11:30:00+03:00",
-    "PreviousURL": "//www.cbr-xml-daily.ru/archive/2026/08/14/daily_json.js",
-    "Timestamp": "2026-08-15T20:00:00+03:00",
+    "Date": "2026-08-19T11:30:00+03:00",
+    "PreviousDate": "2026-08-18T11:30:00+03:00",
+    "PreviousURL": "//www.cbr-xml-daily.ru/archive/2026/08/18/daily_json.js",
+    "Timestamp": "2026-08-18T20:00:00+03:00",
     "Valute": {
       "AUD": {
         "ID": "R01010",
@@ -11,8 +11,8 @@
         "CharCode": "AUD",
         "Nominal": 1,
         "Name": "Австралийский доллар",
-        "Value": 59.7563,
-        "Previous": 59.0831
+        "Value": 60.4753,
+        "Previous": 60.4787
       },
       "AZN": {
         "ID": "R01020A",
@@ -20,8 +20,8 @@
         "CharCode": "AZN",
         "Nominal": 1,
         "Name": "Азербайджанский манат",
-        "Value": 49.7323,
-        "Previous": 49.2975
+        "Value": 50.0968,
+        "Previous": 50.008
       },
       "DZD": {
         "ID": "R01030",
@@ -29,8 +29,8 @@
         "CharCode": "DZD",
         "Nominal": 100,
         "Name": "Алжирских динаров",
-        "Value": 63.65,
-        "Previous": 63.0991
+        "Value": 64.1202,
+        "Previous": 64.0261
       },
       "GBP": {
         "ID": "R01035",
@@ -38,8 +38,8 @@
         "CharCode": "GBP",
         "Nominal": 1,
         "Name": "Фунт стерлингов",
-        "Value": 114.1948,
-        "Previous": 113.2133
+        "Value": 115.4234,
+        "Previous": 115.1849
       },
       "AMD": {
         "ID": "R01060",
@@ -47,8 +47,8 @@
         "CharCode": "AMD",
         "Nominal": 100,
         "Name": "Армянских драмов",
-        "Value": 23.1111,
-        "Previous": 22.9065
+        "Value": 23.3168,
+        "Previous": 23.2595
       },
       "BHD": {
         "ID": "R01080",
@@ -56,8 +56,8 @@
         "CharCode": "BHD",
         "Nominal": 1,
         "Name": "Бахрейнский динар",
-        "Value": 224.8049,
-        "Previous": 222.8396
+        "Value": 226.4524,
+        "Previous": 226.0512
       },
       "BYN": {
         "ID": "R01090B",
@@ -65,8 +65,8 @@
         "CharCode": "BYN",
         "Nominal": 1,
         "Name": "Белорусский рубль",
-        "Value": 28.2702,
-        "Previous": 28.1511
+        "Value": 28.095,
+        "Previous": 28.2147
       },
       "BOB": {
         "ID": "R01105",
@@ -74,8 +74,8 @@
         "CharCode": "BOB",
         "Nominal": 10,
         "Name": "Боливиано",
-        "Value": 72.7581,
-        "Previous": 71.8746
+        "Value": 73.7355,
+        "Previous": 73.4142
       },
       "BRL": {
         "ID": "R01115",
@@ -83,8 +83,8 @@
         "CharCode": "BRL",
         "Nominal": 1,
         "Name": "Бразильский реал",
-        "Value": 16.3038,
-        "Previous": 16.2303
+        "Value": 16.3743,
+        "Previous": 16.2758
       },
       "HUF": {
         "ID": "R01135",
@@ -92,8 +92,8 @@
         "CharCode": "HUF",
         "Nominal": 100,
         "Name": "Форинтов",
-        "Value": 26.8943,
-        "Previous": 26.546
+        "Value": 27.0535,
+        "Previous": 27.2061
       },
       "VND": {
         "ID": "R01150",
@@ -101,8 +101,8 @@
         "CharCode": "VND",
         "Nominal": 10000,
         "Name": "Донгов",
-        "Value": 33.0757,
-        "Previous": 32.7802
+        "Value": 33.2934,
+        "Previous": 33.2266
       },
       "HKD": {
         "ID": "R01200",
@@ -110,8 +110,8 @@
         "CharCode": "HKD",
         "Nominal": 1,
         "Name": "Гонконгский доллар",
-        "Value": 10.7721,
-        "Previous": 10.6786
+        "Value": 10.8559,
+        "Previous": 10.8339
       },
       "GEL": {
         "ID": "R01210",
@@ -119,8 +119,8 @@
         "CharCode": "GEL",
         "Nominal": 1,
         "Name": "Лари",
-        "Value": 32.3048,
-        "Previous": 32.0102
+        "Value": 32.5652,
+        "Previous": 32.4951
       },
       "DKK": {
         "ID": "R01215",
@@ -128,8 +128,8 @@
         "CharCode": "DKK",
         "Nominal": 1,
         "Name": "Датская крона",
-        "Value": 13.0442,
-        "Previous": 12.9422
+        "Value": 13.2069,
+        "Previous": 13.1539
       },
       "AED": {
         "ID": "R01230",
@@ -137,8 +137,8 @@
         "CharCode": "AED",
         "Nominal": 1,
         "Name": "Дирхам ОАЭ",
-        "Value": 23.0211,
-        "Previous": 22.8198
+        "Value": 23.1898,
+        "Previous": 23.1487
       },
       "USD": {
         "ID": "R01235",
@@ -146,8 +146,8 @@
         "CharCode": "USD",
         "Nominal": 1,
         "Name": "Доллар США",
-        "Value": 84.5449,
-        "Previous": 83.8058
+        "Value": 85.1645,
+        "Previous": 85.0136
       },
       "EUR": {
         "ID": "R01239",
@@ -155,8 +155,8 @@
         "CharCode": "EUR",
         "Nominal": 1,
         "Name": "Евро",
-        "Value": 97.5141,
-        "Previous": 96.7538
+        "Value": 98.7312,
+        "Previous": 98.3352
       },
       "EGP": {
         "ID": "R01240",
@@ -164,8 +164,8 @@
         "CharCode": "EGP",
         "Nominal": 10,
         "Name": "Египетских фунтов",
-        "Value": 16.8125,
-        "Previous": 16.6655
+        "Value": 16.8591,
+        "Previous": 16.9336
       },
       "INR": {
         "ID": "R01270",
@@ -173,8 +173,8 @@
         "CharCode": "INR",
         "Nominal": 100,
         "Name": "Индийских рупий",
-        "Value": 88.5971,
-        "Previous": 87.8377
+        "Value": 89.0123,
+        "Previous": 88.9246
       },
       "IDR": {
         "ID": "R01280",
@@ -182,8 +182,8 @@
         "CharCode": "IDR",
         "Nominal": 10000,
         "Name": "Рупий",
-        "Value": 47.2793,
-        "Previous": 46.8817
+        "Value": 47.7487,
+        "Previous": 47.5414
       },
       "IRR": {
         "ID": "R01300",
@@ -191,8 +191,8 @@
         "CharCode": "IRR",
         "Nominal": 1000000,
         "Name": "Иранских риалов",
-        "Value": 54.7404,
-        "Previous": 54.2619
+        "Value": 54.8124,
+        "Previous": 54.8345
       },
       "KZT": {
         "ID": "R01335",
@@ -200,8 +200,8 @@
         "CharCode": "KZT",
         "Nominal": 100,
         "Name": "Тенге",
-        "Value": 18.1743,
-        "Previous": 18.0154
+        "Value": 18.4582,
+        "Previous": 18.3211
       },
       "CAD": {
         "ID": "R01350",
@@ -209,8 +209,8 @@
         "CharCode": "CAD",
         "Nominal": 1,
         "Name": "Канадский доллар",
-        "Value": 60.6578,
-        "Previous": 60.1621
+        "Value": 61.4241,
+        "Previous": 61.2711
       },
       "QAR": {
         "ID": "R01355",
@@ -218,8 +218,8 @@
         "CharCode": "QAR",
         "Nominal": 1,
         "Name": "Катарский риал",
-        "Value": 23.2266,
-        "Previous": 23.0236
+        "Value": 23.3968,
+        "Previous": 23.3554
       },
       "KGS": {
         "ID": "R01370",
@@ -227,8 +227,8 @@
         "CharCode": "KGS",
         "Nominal": 100,
         "Name": "Сомов",
-        "Value": 96.678,
-        "Previous": 95.8328
+        "Value": 97.3865,
+        "Previous": 97.214
       },
       "CNY": {
         "ID": "R01375",
@@ -236,8 +236,8 @@
         "CharCode": "CNY",
         "Nominal": 1,
         "Name": "Юань",
-        "Value": 12.4789,
-        "Previous": 12.4175
+        "Value": 12.624,
+        "Previous": 12.6275
       },
       "CUP": {
         "ID": "R01395",
@@ -245,8 +245,8 @@
         "CharCode": "CUP",
         "Nominal": 10,
         "Name": "Кубинских песо",
-        "Value": 35.227,
-        "Previous": 34.9191
+        "Value": 35.4852,
+        "Previous": 35.4223
       },
       "MDL": {
         "ID": "R01500",
@@ -254,8 +254,8 @@
         "CharCode": "MDL",
         "Nominal": 10,
         "Name": "Молдавских леев",
-        "Value": 48.8098,
-        "Previous": 48.3356
+        "Value": 49.4277,
+        "Previous": 49.1857
       },
       "MNT": {
         "ID": "R01503",
@@ -263,8 +263,8 @@
         "CharCode": "MNT",
         "Nominal": 1000,
         "Name": "Тугриков",
-        "Value": 23.5196,
-        "Previous": 23.3156
+        "Value": 23.6937,
+        "Previous": 23.6524
       },
       "NGN": {
         "ID": "R01520",
@@ -272,8 +272,8 @@
         "CharCode": "NGN",
         "Nominal": 1000,
         "Name": "Найр",
-        "Value": 62.2729,
-        "Previous": 61.5957
+        "Value": 63.1064,
+        "Previous": 62.6201
       },
       "NZD": {
         "ID": "R01530",
@@ -281,8 +281,8 @@
         "CharCode": "NZD",
         "Nominal": 1,
         "Name": "Новозеландский доллар",
-        "Value": 49.5137,
-        "Previous": 49.0725
+        "Value": 50.2172,
+        "Previous": 50.2133
       },
       "NOK": {
         "ID": "R01535",
@@ -290,8 +290,8 @@
         "CharCode": "NOK",
         "Nominal": 10,
         "Name": "Норвежских крон",
-        "Value": 88.762,
-        "Previous": 88.4727
+        "Value": 90.3842,
+        "Previous": 89.9472
       },
       "OMR": {
         "ID": "R01540",
@@ -299,8 +299,8 @@
         "CharCode": "OMR",
         "Nominal": 1,
         "Name": "Оманский риал",
-        "Value": 219.8827,
-        "Previous": 217.9605
+        "Value": 221.4941,
+        "Previous": 221.1017
       },
       "PLN": {
         "ID": "R01565",
@@ -308,8 +308,8 @@
         "CharCode": "PLN",
         "Nominal": 1,
         "Name": "Злотый",
-        "Value": 22.6662,
-        "Previous": 22.4308
+        "Value": 22.828,
+        "Previous": 22.8919
       },
       "SAR": {
         "ID": "R01580",
@@ -317,8 +317,8 @@
         "CharCode": "SAR",
         "Nominal": 1,
         "Name": "Саудовский риял",
-        "Value": 22.5453,
-        "Previous": 22.3482
+        "Value": 22.7105,
+        "Previous": 22.6703
       },
       "RON": {
         "ID": "R01585F",
@@ -326,8 +326,8 @@
         "CharCode": "RON",
         "Nominal": 1,
         "Name": "Румынский лей",
-        "Value": 18.6267,
-        "Previous": 18.429
+        "Value": 18.8009,
+        "Previous": 18.8104
       },
       "XDR": {
         "ID": "R01589",
@@ -335,8 +335,8 @@
         "CharCode": "XDR",
         "Nominal": 1,
         "Name": "СДР (специальные права заимствования)",
-        "Value": 115.4748,
-        "Previous": 114.4879
+        "Value": 116.5561,
+        "Previous": 116.2144
       },
       "SGD": {
         "ID": "R01625",
@@ -344,8 +344,8 @@
         "CharCode": "SGD",
         "Nominal": 1,
         "Name": "Сингапурский доллар",
-        "Value": 66.0507,
-        "Previous": 65.4579
+        "Value": 66.6285,
+        "Previous": 66.5416
       },
       "TJS": {
         "ID": "R01670",
@@ -353,8 +353,8 @@
         "CharCode": "TJS",
         "Nominal": 10,
         "Name": "Сомони",
-        "Value": 91.2736,
-        "Previous": 90.4757
+        "Value": 91.9991,
+        "Previous": 91.8143
       },
       "THB": {
         "ID": "R01675",
@@ -362,8 +362,8 @@
         "CharCode": "THB",
         "Nominal": 10,
         "Name": "Батов",
-        "Value": 25.4661,
-        "Previous": 25.3174
+        "Value": 25.7559,
+        "Previous": 25.7617
       },
       "BDT": {
         "ID": "R01685",
@@ -371,8 +371,8 @@
         "CharCode": "BDT",
         "Nominal": 100,
         "Name": "Так",
-        "Value": 68.7935,
-        "Previous": 68.1921
+        "Value": 69.6462,
+        "Previous": 69.2567
       },
       "TRY": {
         "ID": "R01700J",
@@ -380,8 +380,8 @@
         "CharCode": "TRY",
         "Nominal": 10,
         "Name": "Турецких лир",
-        "Value": 17.7136,
-        "Previous": 17.5654
+        "Value": 17.7968,
+        "Previous": 17.7988
       },
       "TMT": {
         "ID": "R01710A",
@@ -389,8 +389,8 @@
         "CharCode": "TMT",
         "Nominal": 1,
         "Name": "Новый туркменский манат",
-        "Value": 24.1557,
-        "Previous": 23.9445
+        "Value": 24.3327,
+        "Previous": 24.2896
       },
       "UZS": {
         "ID": "R01717",
@@ -398,8 +398,8 @@
         "CharCode": "UZS",
         "Nominal": 10000,
         "Name": "Узбекских сумов",
-        "Value": 70.8206,
-        "Previous": 70.1387
+        "Value": 71.8242,
+        "Previous": 71.493
       },
       "UAH": {
         "ID": "R01720",
@@ -407,8 +407,8 @@
         "CharCode": "UAH",
         "Nominal": 10,
         "Name": "Гривен",
-        "Value": 18.9113,
-        "Previous": 18.749
+        "Value": 19.0203,
+        "Previous": 19.0213
       },
       "CZK": {
         "ID": "R01760",
@@ -416,8 +416,8 @@
         "CharCode": "CZK",
         "Nominal": 10,
         "Name": "Чешских крон",
-        "Value": 40.3825,
-        "Previous": 39.8885
+        "Value": 40.7778,
+        "Previous": 40.7251
       },
       "SEK": {
         "ID": "R01770",
@@ -425,8 +425,8 @@
         "CharCode": "SEK",
         "Nominal": 10,
         "Name": "Шведских крон",
-        "Value": 88.4201,
-        "Previous": 87.986
+        "Value": 89.7475,
+        "Previous": 89.4038
       },
       "CHF": {
         "ID": "R01775",
@@ -434,8 +434,8 @@
         "CharCode": "CHF",
         "Nominal": 1,
         "Name": "Швейцарский франк",
-        "Value": 103.9146,
-        "Previous": 103.1075
+        "Value": 104.947,
+        "Previous": 105.0588
       },
       "ETB": {
         "ID": "R01800",
@@ -443,8 +443,8 @@
         "CharCode": "ETB",
         "Nominal": 100,
         "Name": "Эфиопских быров",
-        "Value": 52.2777,
-        "Previous": 52.3787
+        "Value": 53.1519,
+        "Previous": 52.7533
       },
       "RSD": {
         "ID": "R01805F",
@@ -452,8 +452,8 @@
         "CharCode": "RSD",
         "Nominal": 100,
         "Name": "Сербских динаров",
-        "Value": 83.1664,
-        "Previous": 82.3283
+        "Value": 83.9809,
+        "Previous": 83.9335
       },
       "ZAR": {
         "ID": "R01810",
@@ -461,8 +461,8 @@
         "CharCode": "ZAR",
         "Nominal": 10,
         "Name": "Рэндов",
-        "Value": 52.2708,
-        "Previous": 51.8062
+        "Value": 52.3944,
+        "Previous": 52.6211
       },
       "KRW": {
         "ID": "R01815",
@@ -470,8 +470,8 @@
         "CharCode": "KRW",
         "Nominal": 1000,
         "Name": "Вон",
-        "Value": 59.7533,
-        "Previous": 59.2267
+        "Value": 60.1784,
+        "Previous": 60.0845
       },
       "JPY": {
         "ID": "R01820",
@@ -479,8 +479,8 @@
         "CharCode": "JPY",
         "Nominal": 100,
         "Name": "Иен",
-        "Value": 53.0461,
-        "Previous": 52.5956
+        "Value": 53.4014,
+        "Previous": 53.4542
       },
       "MMK": {
         "ID": "R02005",
@@ -488,10 +488,10 @@
         "CharCode": "MMK",
         "Nominal": 1000,
         "Name": "Кьятов",
-        "Value": 40.2595,
-        "Previous": 39.9075
+        "Value": 40.5545,
+        "Previous": 40.4827
       }
     }
   },
-  "timestamp": 1786859087.9521277
+  "timestamp": 1787114375.0145404
 }

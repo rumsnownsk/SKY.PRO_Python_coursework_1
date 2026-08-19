@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 import pandas as pd
+from pandas import Timestamp
 
 from src.config import CACHE_TTL, PROJECT_ROOT
 
@@ -227,3 +228,10 @@ def logger(module_name: str = "no_name") -> logging.Logger:
         # Опционально: можно вывести в консоль, что логгер уже настроен (для отладки самого логгера)
         pass
     return logger_obj
+
+def datetime_handle(obj):
+    if isinstance(obj, Timestamp):
+        return obj.strftime("%Y-%m-%d")
+    raise TypeError (f"Тип {type(obj)} не сериализуется")
+
+
