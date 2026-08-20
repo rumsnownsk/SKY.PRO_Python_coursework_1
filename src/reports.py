@@ -1,17 +1,43 @@
 import json
 import os
-from calendar import month
+import logging
+
 from functools import wraps
-from typing import Optional, Callable, Any
+from typing import Optional, Callable, Any, List, Dict
 
 import pandas as pd
+
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_REPORT_FILENAME = "report_spending.json"
 
 def save_report(filename: Optional[str] = None):
+    """
+    Декоратор для сохранения результата функции (DataFrame) в JSON-файл.
+
+    Если декорированная функция возвращает pandas.DataFrame, он конвертируется
+    в список словарей (JSON-совместимый формат) и сохраняется в папку 'tmp'.
+    Даты приводятся к строкам '%Y-%m-%d', NaN заменяются на None.
+
+    Args:
+        filename (Optional[str]): Имя файла для сохранения. Если не передано,
+            используется DEFAULT_REPORT_FILENAME ('report_spending.json').
+
+    Returns:
+        Callable: Декоратор, который оборачивает функцию.
+
+    Notes:
+        - Папка 'tmp' создаётся автоматически (exist_ok=True).
+        - Любые ошибки при записи в файл молча игнорируются (try/except).
+        - Если результат функции не является DataFrame, декоратор просто возвращает
+          результат без сохранения.
+    """
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         def wrapper(*args, **kwargs):
+            logger.info("Запуск декорированной функции: %s", func.__name__)
+
             # 1. Сначала запускаем саму функцию и получаем результат (DataFrame)
             result = func(*args, **kwargs)
 
@@ -31,8 +57,11 @@ def save_report(filename: Optional[str] = None):
             try:
                 with open(full_path, "w", encoding="utf-8") as f:
                     json.dump(data_to_save, f, ensure_ascii=False)
+                logger.info("Отчёт сохранён: %s (строк: %d)", full_path, len(data_to_save))
+
             except Exception as e:
-                pass
+                logger.error("Не удалось сохранить отчёт в %s: %s", full_path, e)
+                raise RuntimeError(f"Failed to save report: {e}") from e
 
             return result
         return wrapper
@@ -41,22 +70,43 @@ def save_report(filename: Optional[str] = None):
 
 def _prepare_for_json(data: Any) -> Any:
     """
-    Вспомогательная функция: превращает DataFrame в список словарей,
-    чистит даты и NaN, чтобы они стали валидным JSON.
+    Преобразует pandas.DataFrame в список словарей, пригодный для json.dump.
+
+    Выполняет следующие преобразования:
+      - pandas.Timestamp → строка '%Y-%m-%d' или None, если значение пропущено.
+      - float NaN → None (чтобы в JSON стал null).
+      - Остальные значения остаются без изменений.
+
+    Args:
+        data (Any): Ожидаемый вход — pandas.DataFrame.
+
+    Returns:
+        List[Dict]: Список словарей с очищенными значениями.
+
+    Raises:
+        TypeError: Если переданный объект не является DataFrame.
     """
+    if not isinstance(data, pd.DataFrame):
+        logger.error("_prepare_for_json вызван не с DataFrame: %s", type(data).__name__)
+        raise TypeError(f"_prepare_for_json ожидает DataFrame, получено {type(data).__name__}")
+
     records = data.to_dict(orient="records")
-    cleaned = []
+    cleaned: List[Dict[str, Any]] = []
+
     for row in records:
         clean_row = {}
         for k, v in row.items():
-            if isinstance(v, pd.Timestamp):
-                clean_row[k] = v.strftime("%Y-%m-%d") if pd.notna(v) else None
-            # Если это NaN (пустое число) -> превращаем в None (который станет null в JSON)
+            # Явная обработка pd.NaT (это отдельный тип, который не является Timestamp)
+            if v is pd.NaT or (isinstance(v, pd.Timestamp) and pd.isna(v)):
+                clean_row[k] = None
+            elif isinstance(v, pd.Timestamp):
+                clean_row[k] = v.strftime("%Y-%m-%d")
             elif isinstance(v, float) and pd.isna(v):
                 clean_row[k] = None
             else:
                 clean_row[k] = v
         cleaned.append(clean_row)
+    logger.debug("JSON-подготовка завершена: %d записей", len(cleaned))
     return cleaned
 
 
@@ -65,7 +115,25 @@ def _prepare_for_json(data: Any) -> Any:
 def spending_by_category(transactions: pd.DataFrame,
                          category: str,
                          date: Optional[str] = None) -> pd.DataFrame:
+    """
+    Преобразует pandas.DataFrame в список словарей, пригодный для json.dump.
+
+    Выполняет следующие преобразования:
+      - pandas.Timestamp → строка '%Y-%m-%d' или None, если значение пропущено.
+      - float NaN → None (чтобы в JSON стал null).
+      - Остальные значения остаются без изменений.
+
+    Args:
+        data (Any): Ожидаемый вход — pandas.DataFrame.
+
+    Returns:
+        List[Dict]: Список словарей с очищенными значениями.
+
+    Raises:
+        AttributeError: Если у переданного объекта нет метода .to_dict (не DataFrame).
+    """
     if transactions.empty:
+        logger.warning("spending_by_category: входной DataFrame пуст, возвращаем пустой результат")
         return pd.DataFrame()
 
     # устанавливаем даты начала и конца периода
@@ -74,11 +142,15 @@ def spending_by_category(transactions: pd.DataFrame,
     else:
         try:
             ref_date = pd.to_datetime(date)
-        except ValueError:
+        except (ValueError, TypeError):
+            logger.warning("Неверный формат даты '%s', используется текущая дата.", date)
             ref_date = pd.Timestamp.today()
 
     start_date = ref_date - pd.DateOffset(months=3)
-
+    logger.info(
+        "spending_by_category: фильтр по датам [%s, %s], категория содержит '%s'",
+        start_date.date(), ref_date.date(), category
+    )
     # фильтруем данные по периоду и категории
     mask_date = (transactions["date"] >= start_date) & (transactions["date"] <= ref_date)
     mask_category = transactions["category"].str.contains(category, case=False, na=False)
@@ -88,12 +160,32 @@ def spending_by_category(transactions: pd.DataFrame,
 
     if not res_df.empty:
         res_df = res_df.sort_values(by="date", ascending=False)
-
+    logger.info(
+        "spending_by_category: отфильтровано %d строк (из %d)",
+        len(res_df), len(transactions)
+    )
     return res_df
 
 @save_report("report_spending_by_weekday.json")
 def spending_by_weekday(transactions: pd.DataFrame,
                         date: Optional[str] = None) -> pd.DataFrame:
+    """
+    Возвращает DataFrame со средним чеком по дням недели за последние 3 месяца.
+
+    Для каждой транзакции вычисляется день недели, затем считается среднее значение
+    по колонке 'amount' для каждого дня. Результат содержит колонки
+    ['weekday', 'avg_amount'].
+
+    Args:
+        transactions (pd.DataFrame): Исходный DataFrame с транзакциями.
+            Должна быть колонка 'date' и 'amount'.
+        date (Optional[str], optional): Дата отсчёта. Если не указана,
+            используется текущая дата.
+
+    Returns:
+        pd.DataFrame: DataFrame с колонками ['weekday', 'avg_amount'],
+            либо пустой DataFrame с этими колонками, если данных нет.
+    """
     if transactions.empty:
         return pd.DataFrame(columns=["weekday", "avg_amount"])
 
@@ -103,7 +195,13 @@ def spending_by_weekday(transactions: pd.DataFrame,
         try:
             ref_date = pd.to_datetime(date)
         except (ValueError, TypeError):
+            logger.warning("spending_by_weekday: неверный формат даты '%s', используем текущую дату", date)
             ref_date = pd.Timestamp.today()
+    logger.info(
+        "spending_by_weekday: фильтр по датам [%s, %s]",
+        start_date.date(), ref_date.date()
+    )
+
     start_date = ref_date - pd.DateOffset(months=3)
 
     df = transactions.copy()
@@ -117,6 +215,7 @@ def spending_by_weekday(transactions: pd.DataFrame,
     filtered = df[mask].copy()
 
     if filtered.empty:
+        logger.info("spending_by_weekday: после фильтрации данных нет, возвращаем пустой DataFrame")
         return pd.DataFrame(columns=["weekday", "avg_amount"])
 
     day_map = {
@@ -135,6 +234,10 @@ def spending_by_weekday(transactions: pd.DataFrame,
         .mean()
         .reset_index()
         .rename(columns={"amount": "avg_amount"})
+    )
+    logger.info(
+        "spending_by_weekday: рассчитано среднее по %d дням недели",
+        len(result)
     )
     return result
 
