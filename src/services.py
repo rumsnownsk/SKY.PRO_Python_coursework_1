@@ -1,16 +1,11 @@
-import json
-import re
 from datetime import datetime
-from typing import List, Dict, Any
+from typing import Any, Dict, List
 
 import pandas as pd
-import numpy as np
-
 from pandas import DataFrame
 
-from src.utils import load_transactions
 
-def best_cashback_from_category(df: DataFrame, year:int, month: int) -> Dict[str, int]:
+def best_cashback_from_category(df: DataFrame, year: int, month: int) -> Dict[str, int]:
     """
     Возвращает словарь с суммарным кэшбэком по категориям за указанный месяц и год.
 
@@ -42,11 +37,16 @@ def best_cashback_from_category(df: DataFrame, year:int, month: int) -> Dict[str
     first_date = df["date"].min()
 
     if not isinstance(month, int) or not isinstance(year, int):
-        raise TypeError(f"month и year должны быть целыми числами. Последняя дата в транзакциях:{last_date.month}.{last_date.year}")
+        raise TypeError(
+            f"month и year должны быть целыми числами. Последняя дата в транзакциях:{last_date.month}.{last_date.year}"
+        )
     if month < 1 or month > 12:
         raise ValueError("month должен быть от 1 до 12 (включительно)")
     if year < first_date.year or year > last_date.year:
-        raise TypeError(f"Допустимый диапазон дат: начало - {first_date.month}.{first_date.year}; Конец - {last_date.month}.{last_date.year}")
+        raise TypeError(
+            f"Допустимый диапазон дат: начало - {first_date.month}.{first_date.year}; "
+            f"Конец - {last_date.month}.{last_date.year}"
+        )
 
     # 1. Фильтруем ДатаФрейм по конкретному месяцу конкретного года
     filtered = df[(df["date"].dt.year == year) & (df["date"].dt.month == month)].copy()
@@ -66,6 +66,7 @@ def best_cashback_from_category(df: DataFrame, year:int, month: int) -> Dict[str
     )
 
     return result.to_dict()
+
 
 def investment_bank(month: str, transactions: List[Dict[str, Any]], limit: int) -> float:
     """
@@ -108,7 +109,6 @@ def investment_bank(month: str, transactions: List[Dict[str, Any]], limit: int) 
             raise ValueError(f"Неверный формат даты: {t['date']}") from e
 
         if tx_date.year != target_year or tx_date.month != target_month:
-
             continue
         amount = float(t["amount"])
 
@@ -126,6 +126,7 @@ def investment_bank(month: str, transactions: List[Dict[str, Any]], limit: int) 
         total_saved += saved
 
     return total_saved
+
 
 def get_transactions_with_phone(df_tr: pd.DataFrame) -> List[Dict[str, Any]]:
     """
@@ -150,7 +151,7 @@ def get_transactions_with_phone(df_tr: pd.DataFrame) -> List[Dict[str, Any]]:
         - Регулярное выражение настроено на поиск российских мобильных номеров.
         - Все нечисловые значения в датах приводятся к NaT и затем конвертируются в None.
     """
-    pattern = r'(?:\+?7|8)[\s\-()]*\d{3}[\s\-()]*\d{2,3}[\s\-()]*\d{2}[\s\-()]*\d{2}'
+    pattern = r"(?:\+?7|8)[\s\-()]*\d{3}[\s\-()]*\d{2,3}[\s\-()]*\d{2}[\s\-()]*\d{2}"
 
     # Защита: если колонки нет — сразу пустой список
     if "description" not in df_tr.columns:
@@ -174,7 +175,8 @@ def get_transactions_with_phone(df_tr: pd.DataFrame) -> List[Dict[str, Any]]:
 
     return with_phone.to_dict(orient="records")
 
-def get_transfer(df_tr:pd.DataFrame) -> List[Dict[str, Any]]:
+
+def get_transfer(df_tr: pd.DataFrame) -> List[Dict[str, Any]]:
     """
     Фильтрует транзакции, относящиеся к переводам между людьми, где в описании
     присутствует имя и инициал (формат: слово + пробел + заглавная буква + точка).
@@ -197,11 +199,10 @@ def get_transfer(df_tr:pd.DataFrame) -> List[Dict[str, Any]]:
     """
     pattern = r"\w+\s+[А-ЯЁ]\."
 
-    with_transfer = df_tr[
-        df_tr["category"].str.contains("Переводы", regex=False, na=False)
-        &
-        df_tr["description"].str.contains(pattern, regex=True, na=False)
-    ].copy()
+    cat_mask = df_tr["category"].str.contains("Переводы", regex=False, na=False)
+    desc_mask = df_tr["description"].str.contains(pattern, regex=True, na=False)
+
+    with_transfer = df_tr[cat_mask & desc_mask].copy()
 
     if "date" in with_transfer.columns:
         # Сначала убедимся, что колонка datetime, потом конвертируем в строку

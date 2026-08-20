@@ -229,9 +229,8 @@ def logger(module_name: str = "no_name") -> logging.Logger:
         pass
     return logger_obj
 
+
 def datetime_handle(obj):
     if isinstance(obj, Timestamp):
         return obj.strftime("%Y-%m-%d")
-    raise TypeError (f"Тип {type(obj)} не сериализуется")
-
-
+    raise TypeError(f"Тип {type(obj)} не сериализуется")

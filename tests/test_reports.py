@@ -1,29 +1,30 @@
-
-import os
 import json
-import pytest
-import pandas as pd
+import os
 from datetime import timedelta
 
-from src.reports import _prepare_for_json, spending_by_category, spending_by_weekday
+import pandas as pd
+import pytest
 
+from src.reports import _prepare_for_json, spending_by_category, spending_by_weekday
 
 TMP_DIR = "tmp"
 
 
 @pytest.fixture
 def sample_transactions():
-    df = pd.DataFrame({
-        "date": [
-            pd.Timestamp("2024-11-20"),  # попадает, категория Продукты
-            pd.Timestamp("2024-11-10"),  # попадает, категория Продукты
-            pd.Timestamp("2024-10-11"),  # попадает, категория Продукты
-            pd.Timestamp("2024-07-22"),  # НЕ попадает (старше 3 месяцев)
-        ],
-        "category": ["Продукты", "Продукты", "Продукты", "Продукты"],
-        "amount": [100.0, 200.0, 150.0, 500.0],
-        "description": ["Хлеб", "Молоко", "Заказ", "Старый заказ"],
-    })
+    df = pd.DataFrame(
+        {
+            "date": [
+                pd.Timestamp("2024-11-20"),  # попадает, категория Продукты
+                pd.Timestamp("2024-11-10"),  # попадает, категория Продукты
+                pd.Timestamp("2024-10-11"),  # попадает, категория Продукты
+                pd.Timestamp("2024-07-22"),  # НЕ попадает (старше 3 месяцев)
+            ],
+            "category": ["Продукты", "Продукты", "Продукты", "Продукты"],
+            "amount": [100.0, 200.0, 150.0, 500.0],
+            "description": ["Хлеб", "Молоко", "Заказ", "Старый заказ"],
+        }
+    )
     return df
 
 
@@ -36,18 +37,22 @@ def sample_transactions():
 #             os.remove(os.path.join(TMP_DIR, fname))
 #         os.rmdir(TMP_DIR)
 
+
 def test_prepare_for_json_converts_timestamp_and_nan():
-    df = pd.DataFrame({
-        "date": [pd.Timestamp("2024-01-01"), pd.NaT],
-        "amount": [10.5, float("nan")],
-        "category": ["A", "B"],
-    })
+    df = pd.DataFrame(
+        {
+            "date": [pd.Timestamp("2024-01-01"), pd.NaT],
+            "amount": [10.5, float("nan")],
+            "category": ["A", "B"],
+        }
+    )
     result = _prepare_for_json(df)
     assert isinstance(result, list)
     assert len(result) == 2
     assert result[0]["date"] == "2024-01-01"
     assert result[1]["date"] is None
     assert result[1]["amount"] is None
+
 
 def test_prepare_for_json_raises_on_non_dataframe():
     with pytest.raises(TypeError):
@@ -70,6 +75,7 @@ def test_spending_by_category(sample_transactions):
     ]
     assert dates_list == expected
     # assert result_empty.empty
+
 
 def test_spending_by_weekday_returns_avg_by_day(sample_transactions):
     ref_date = pd.Timestamp("2024-11-20")  # среда
@@ -97,8 +103,3 @@ def test_spending_by_weekday_saves_json(sample_transactions):
     with open(file_path, "r", encoding="utf-8") as f:
         data = json.load(f)
     assert isinstance(data, list)
-
-
-
-
-

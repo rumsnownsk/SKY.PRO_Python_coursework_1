@@ -1,16 +1,15 @@
 import json
-import os
 import logging
-
+import os
 from functools import wraps
-from typing import Optional, Callable, Any, List, Dict
+from typing import Any, Callable, Dict, List, Optional
 
 import pandas as pd
-
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_REPORT_FILENAME = "report_spending.json"
+
 
 def save_report(filename: Optional[str] = None):
     """
@@ -33,6 +32,7 @@ def save_report(filename: Optional[str] = None):
         - Если результат функции не является DataFrame, декоратор просто возвращает
           результат без сохранения.
     """
+
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -51,7 +51,7 @@ def save_report(filename: Optional[str] = None):
             data_to_save = _prepare_for_json(result)
 
             # 4. сохраняем в папку
-            os.makedirs('tmp', exist_ok=True)
+            os.makedirs("tmp", exist_ok=True)
             full_path = os.path.join("tmp", target_filename)
 
             try:
@@ -64,7 +64,9 @@ def save_report(filename: Optional[str] = None):
                 raise RuntimeError(f"Failed to save report: {e}") from e
 
             return result
+
         return wrapper
+
     return decorator
 
 
@@ -110,11 +112,8 @@ def _prepare_for_json(data: Any) -> Any:
     return cleaned
 
 
-
 @save_report("report_spending_by_category.json")
-def spending_by_category(transactions: pd.DataFrame,
-                         category: str,
-                         date: Optional[str] = None) -> pd.DataFrame:
+def spending_by_category(transactions: pd.DataFrame, category: str, date: Optional[str] = None) -> pd.DataFrame:
     """
     Преобразует pandas.DataFrame в список словарей, пригодный для json.dump.
 
@@ -149,7 +148,9 @@ def spending_by_category(transactions: pd.DataFrame,
     start_date = ref_date - pd.DateOffset(months=3)
     logger.info(
         "spending_by_category: фильтр по датам [%s, %s], категория содержит '%s'",
-        start_date.date(), ref_date.date(), category
+        start_date.date(),
+        ref_date.date(),
+        category,
     )
     # фильтруем данные по периоду и категории
     mask_date = (transactions["date"] >= start_date) & (transactions["date"] <= ref_date)
@@ -160,15 +161,12 @@ def spending_by_category(transactions: pd.DataFrame,
 
     if not res_df.empty:
         res_df = res_df.sort_values(by="date", ascending=False)
-    logger.info(
-        "spending_by_category: отфильтровано %d строк (из %d)",
-        len(res_df), len(transactions)
-    )
+    logger.info("spending_by_category: отфильтровано %d строк (из %d)", len(res_df), len(transactions))
     return res_df
 
+
 @save_report("report_spending_by_weekday.json")
-def spending_by_weekday(transactions: pd.DataFrame,
-                        date: Optional[str] = None) -> pd.DataFrame:
+def spending_by_weekday(transactions: pd.DataFrame, date: Optional[str] = None) -> pd.DataFrame:
     """
     Возвращает DataFrame со средним чеком по дням недели за последние 3 месяца.
 
@@ -197,12 +195,9 @@ def spending_by_weekday(transactions: pd.DataFrame,
         except (ValueError, TypeError):
             logger.warning("spending_by_weekday: неверный формат даты '%s', используем текущую дату", date)
             ref_date = pd.Timestamp.today()
-    logger.info(
-        "spending_by_weekday: фильтр по датам [%s, %s]",
-        start_date.date(), ref_date.date()
-    )
-
     start_date = ref_date - pd.DateOffset(months=3)
+
+    logger.info("spending_by_weekday: фильтр по датам [%s, %s]", start_date.date(), ref_date.date())
 
     df = transactions.copy()
     if not pd.api.types.is_datetime64_any_dtype(df["date"]):
@@ -218,26 +213,11 @@ def spending_by_weekday(transactions: pd.DataFrame,
         logger.info("spending_by_weekday: после фильтрации данных нет, возвращаем пустой DataFrame")
         return pd.DataFrame(columns=["weekday", "avg_amount"])
 
-    day_map = {
-        0: "Понедельник",
-        1: "Вторник",
-        2: "Среда",
-        3: "Четверг",
-        4: "Пятница",
-        5: "Суббота",
-        6: "Воскресенье"
-    }
+    day_map = {0: "Понедельник", 1: "Вторник", 2: "Среда", 3: "Четверг", 4: "Пятница", 5: "Суббота", 6: "Воскресенье"}
     filtered["weekday"] = filtered["date"].dt.dayofweek.map(day_map)
 
     result = (
-        filtered.groupby("weekday", sort=False)["amount"]
-        .mean()
-        .reset_index()
-        .rename(columns={"amount": "avg_amount"})
+        filtered.groupby("weekday", sort=False)["amount"].mean().reset_index().rename(columns={"amount": "avg_amount"})
     )
-    logger.info(
-        "spending_by_weekday: рассчитано среднее по %d дням недели",
-        len(result)
-    )
+    logger.info("spending_by_weekday: рассчитано среднее по %d дням недели", len(result))
     return result
-

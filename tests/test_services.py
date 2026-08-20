@@ -5,26 +5,22 @@ from src.services import *
 
 @pytest.fixture
 def sample_transactions_df():
-    df = pd.DataFrame({
-        "date": [
-            "2024-10-05", "2024-10-15", "2024-11-03", "2024-11-20",
-            "2024-11-25", "2024-12-01"
-        ],
-        "category": [
-            "Продукты", "Продукты", "Переводы", "Переводы",
-            "Электроника", "Продукты"
-        ],
-        "description": [
-            "Покупка в магазине",
-            "+7 900 111-22-33 доставка",
-            "Иван И.",
-            "Мария П.",
-            "Оплата заказа",
-            "89990001122 курьер"
-        ],
-        "cashback": [120.4, 80.6, 0, 50.1, 300.9, 25.3],
-        "amount": [-1200, -800, -5000, -3000, -20000, -300]
-    })
+    df = pd.DataFrame(
+        {
+            "date": ["2024-10-05", "2024-10-15", "2024-11-03", "2024-11-20", "2024-11-25", "2024-12-01"],
+            "category": ["Продукты", "Продукты", "Переводы", "Переводы", "Электроника", "Продукты"],
+            "description": [
+                "Покупка в магазине",
+                "+7 900 111-22-33 доставка",
+                "Иван И.",
+                "Мария П.",
+                "Оплата заказа",
+                "89990001122 курьер",
+            ],
+            "cashback": [120.4, 80.6, 0, 50.1, 300.9, 25.3],
+            "amount": [-1200, -800, -5000, -3000, -20000, -300],
+        }
+    )
     df["date"] = pd.to_datetime(df["date"])
     return df
 
@@ -80,7 +76,7 @@ def test_get_transactions_with_phone(sample_transactions_df):
     descriptions = [el["description"] for el in result_norm]
 
     assert any("+7" in d for d in descriptions)
-    assert any("8" in d and len(d)>5 for d in descriptions)
+    assert any("8" in d and len(d) > 5 for d in descriptions)
 
     df_no_phone = pd.DataFrame([{"columns": "any"}])
     result_no_phone = get_transactions_with_phone(df_no_phone)
@@ -102,8 +98,3 @@ def test_get_transfer(sample_transactions_df):
 
     for row in result:
         assert isinstance(row["date"], str) or row["date"] is None
-
-
-
-
-
